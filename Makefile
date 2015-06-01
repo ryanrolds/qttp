@@ -15,11 +15,11 @@
 
 TARGET = qttp
 
-CC = gcc
-CFLAGS = -Wall -std=c++11
+CC = g++
+CFLAGS = -g -Wall -std=c++11 -Iinclude/
 
-LINKER = gcc -o
-LFLAGS = -Wall -pthread
+LINKER = g++ -o
+LFLAGS = -Wall -pthread -Iinclude/ include/http_parser.o
 
 SRCDIR = src
 OBJDIR = build
