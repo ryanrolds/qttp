@@ -4,14 +4,15 @@
 ### Complete
 - Accept thread
 - Priority queue
-- Worker pool
+- Worker pool (select style)
 - Orderly shutdown
 ### In progress
-- Signal handling
-- RabbitMQ thread
-- Access log
-- log4cpp
+- Worker pool (epoll style)
 
 ## Suggestions
 
 ## Backlog
+- Signal handling
+- Access log
+- log4cplus
+- RabbitMQ thread
