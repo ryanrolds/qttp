@@ -12,6 +12,7 @@
 #include <fcntl.h>
 
 void *connection_handler(ConnectionQueue *);
+void *connection_handler_epoll(ConnectionQueue *);
 
 const size_t NUM_WORKERS = 10;
 
@@ -65,7 +66,12 @@ int qttp() {
   // Create Worker threads, queue from connection queue
   for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
-    workers[i] = std::thread(connection_handler, queue);
+    
+    // Create worker that uses select based connection handler
+    //workers[i] = std::thread(connection_handler, queue);
+
+    // Create worker that uses epoll connection handler
+    workers[i] = std::thread(connection_handler_epoll, queue);
   }
 
   // Process commands from TTY

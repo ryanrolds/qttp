@@ -12,6 +12,7 @@ private:
   std::mutex mtx;
   std::condition_variable cond;
   std::priority_queue<Connection *> queue;
+  Connection* _pop();
 
 public:
   ConnectionQueue();
@@ -19,6 +20,7 @@ public:
   void shutdown();
   bool running();
   void push(Connection *);
+  Connection* pop_nb();
   Connection* pop();
 };
 

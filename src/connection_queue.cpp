@@ -23,26 +23,43 @@ bool ConnectionQueue::running() {
 
 void ConnectionQueue::push(Connection *conn) {
   std::unique_lock<std::mutex> lk(mtx);
-  queue.push(conn);
-  lk.unlock();
 
+  queue.push(conn);
+
+  lk.unlock();
   cond.notify_one();
+}
+
+Connection* ConnectionQueue::pop_nb() {
+  std::unique_lock<std::mutex> lk(mtx);
+
+  Connection *conn = _pop(); 
+
+  lk.unlock();
+  return conn;
 }
 
 Connection* ConnectionQueue::pop() {
   std::unique_lock<std::mutex> lk(mtx);
   cond.wait(lk, [this]{return (queue.empty() == false) || popNull;});
 
+  Connection *conn = _pop();
+
+  lk.unlock();
+  return conn;
+}
+
+Connection* ConnectionQueue::_pop() {
   if (popNull) {
     std::cout << "Sending null\n";
-    lk.unlock();
+    return NULL;
+  }
+
+  if (queue.empty()) {
     return NULL;
   }
 
   Connection *conn = queue.top();
   queue.pop();
-
-  lk.unlock();
-
   return conn;
 }
