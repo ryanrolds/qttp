@@ -1,8 +1,11 @@
 #include "qttp.h"
 
-const int NUM_WORKERS = 10;
+#include <cstddef>
 
 int main(int argc, char *argv[]) {
-  int result = qttp(NUM_WORKERS);
+  int result = qttp();
+
+  // Signal handling
+
   return result;
 }

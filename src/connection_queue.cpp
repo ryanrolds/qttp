@@ -3,40 +3,46 @@
 #include <iostream>
 #include <thread>
 
-ConnectionQueue::ConnectionQueue() {}
+ConnectionQueue::ConnectionQueue() {
+  startup();
+}
+
+void ConnectionQueue::startup() {
+  popNull = false;
+};
+
+void ConnectionQueue::shutdown() {
+  std::cout << "Shutdown";
+  popNull = true;
+  cond.notify_all();
+};
+
+bool ConnectionQueue::running() {
+  return popNull == false;
+};
 
 void ConnectionQueue::push(Connection *conn) {
-  std::cout << std::this_thread::get_id() << " Calling push\n";
-
   std::unique_lock<std::mutex> lk(mtx);
-
   queue.push(conn);
-
-  std::cout << std::this_thread::get_id() << " Pushed connection " << conn->fd << "" <<
-    queue.size() << "\n";
-
   lk.unlock();
 
   cond.notify_one();
 }
 
 Connection* ConnectionQueue::pop() {
-  std::cout << std::this_thread::get_id() << " Calling pop\n";
-
   std::unique_lock<std::mutex> lk(mtx);
+  cond.wait(lk, [this]{return (queue.empty() == false) || popNull;});
 
-  std::cout << std::this_thread::get_id() << " Got pop lock\n";
-
-  cond.wait(lk, [this]{return (queue.empty() == false);});
-
-  std::cout << std::this_thread::get_id() << " Pop post wait\n";
+  if (popNull) {
+    std::cout << "Sending null\n";
+    lk.unlock();
+    return NULL;
+  }
 
   Connection *conn = queue.top();
   queue.pop();
 
-  std::cout << std::this_thread::get_id() <<  " Popped " << conn->fd << " " <<
-    queue.size() << std::endl;
-
   lk.unlock();
+
   return conn;
 }

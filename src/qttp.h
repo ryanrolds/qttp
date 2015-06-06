@@ -1,1 +1,1 @@
-int qttp(const int);
+int qttp();

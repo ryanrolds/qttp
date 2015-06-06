@@ -1,6 +1,7 @@
 #include "connection_queue.h"
 #include "accept_handler.h"
 
+#include <array>
 #include <errno.h>
 #include <iostream>
 #include <netdb.h>
@@ -8,10 +9,13 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 void *connection_handler(ConnectionQueue *);
 
-int qttp(const int NUM_WORKERS) {
+const size_t NUM_WORKERS = 10;
+
+int qttp() {
   // Setup hints needed by getaddrinfo
   struct addrinfo hints;
   memset(&hints, 0, sizeof(struct addrinfo));
@@ -27,20 +31,24 @@ int qttp(const int NUM_WORKERS) {
   struct addrinfo *address;
   int result = getaddrinfo(NULL, port, &hints, &address);
   if (result != 0) {
+    free(address); // Valgrind clean
     std::cout << "getaddrinfo: " << strerror(errno) << "\n"; 
     return 1;
   }
 
   // Create socket 
   int socketfd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
-  std::cout << "Socket fd: " << socketfd << "\n";
 
   // Bind socket
   result = bind(socketfd, address->ai_addr, address->ai_addrlen); 
   if (result != 0) {
+    free(address); // Valgrind clean
     std::cout << "Bind error: " << strerror(errno) << "\n";
     return 1;
   }
+
+  // Done with address
+  free(address);
 
   // Listen for connections
   listen(socketfd, 3);
@@ -51,13 +59,11 @@ int qttp(const int NUM_WORKERS) {
   accept_handler_args args;
   args.queue = queue;
   args.socketfd = &socketfd;
-
-  std::cout << "Starting accept thread\n";
   std::thread accept_thread(accept_handler, &args);
 
-  std::thread workers[NUM_WORKERS];
+  std::array<std::thread, NUM_WORKERS> workers;
   // Create Worker threads, queue from connection queue
-  for (int i = 0; i < NUM_WORKERS; i++) {
+  for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
     workers[i] = std::thread(connection_handler, queue);
   }
@@ -71,15 +77,21 @@ int qttp(const int NUM_WORKERS) {
 
     std::cout << word << "\n";
   }
+  
+  // Triggers exit of accept thread (running flag) and worker threads (poison pill)
+  queue->shutdown();
+
+  // Join the accept thread
+  accept_thread.join();
+  
+  for (size_t i = 0; i < workers.size(); i++) {
+    workers[i].join();
+  }
 
   result = close(socketfd);
   if (result != 0) {
     std::cout << "Close error: " << strerror(errno) << "\n";
   }
-
-  // TODO
-  // join accept and all worker threads
-  // clean up sockets
 
   return 0;
 }
