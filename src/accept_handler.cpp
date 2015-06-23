@@ -33,7 +33,7 @@ void *accept_handler(accept_handler_args *args) {
     }
 
     if (select_result == 0) {
-      std::cout << "Select timout\n";
+      //std::cout << "Select timout\n";
       // timeout
       continue;
     }

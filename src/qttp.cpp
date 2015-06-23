@@ -1,25 +1,22 @@
-#include "connection_queue.h"
-#include "accept_handler.h"
+#include "qttp.h"
+#include "connection_handler_epoll.h"
+//#include "connection_queue.h"
+//#include "accept_handler.h"
 
 #include <array>
 #include <errno.h>
 #include <iostream>
-#include <netdb.h>
-#include <thread>
+
+
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
+
 #include <fcntl.h>
 
-void *connection_handler(ConnectionQueue *);
-void *connection_handler_epoll(ConnectionQueue *);
+QTTP::QTTP() {};
 
-const size_t NUM_WORKERS = 10;
-
-int qttp() {
-  // Setup hints needed by getaddrinfo
-  struct addrinfo hints;
-  memset(&hints, 0, sizeof(struct addrinfo));
+int QTTP::Bind() {
+  hints = {0};
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = 0;
@@ -34,45 +31,56 @@ int qttp() {
   if (result != 0) {
     free(address); // Valgrind clean
     std::cout << "getaddrinfo: " << strerror(errno) << "\n"; 
-    return 1;
+    return -1;
   }
 
   // Create socket 
-  int socketfd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+  socketfd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
 
   // Bind socket
   result = bind(socketfd, address->ai_addr, address->ai_addrlen); 
   if (result != 0) {
     free(address); // Valgrind clean
     std::cout << "Bind error: " << strerror(errno) << "\n";
-    return 1;
+    return -1;
   }
 
   // Done with address
   free(address);
 
-  // Listen for connections
+  return 0;
+};
+
+int QTTP::Listen() {
+ // Listen for connections
   listen(socketfd, 3);
 
-  ConnectionQueue *queue = new ConnectionQueue();
+  return 0;
+}
 
-  // Create thread that accepts connections
-  accept_handler_args args;
-  args.queue = queue;
-  args.socketfd = &socketfd;
-  std::thread accept_thread(accept_handler, &args);
+int QTTP::StartWorkers() {
+  int result = pipe(pipefd);
+  if (result == -1) {
+    std::cout << "Pipe create error: " << strerror(errno) << "\n";
+    return -1;
+  }
 
-  std::array<std::thread, NUM_WORKERS> workers;
+  std::cout << "Pipe read fd " << pipefd[0] << "\n";
+  std::cout << "Pipe write fd " << pipefd[1] << "\n";
+
   // Create Worker threads, queue from connection queue
   for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
-    
-    // Create worker that uses select based connection handler
-    //workers[i] = std::thread(connection_handler, queue);
 
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_handler_epoll, queue);
+    workers[i] = std::thread(connection_handler_epoll, pipefd[0], socketfd);
   }
+
+  return 0;
+}
+
+int QTTP::StartTTY() {
+  std::cout << "TTY\n";
 
   // Process commands from TTY
   std::string word;
@@ -83,21 +91,31 @@ int qttp() {
 
     std::cout << word << "\n";
   }
-  
-  // Triggers exit of accept thread (running flag) and worker threads (poison pill)
-  queue->shutdown();
 
-  // Join the accept thread
-  accept_thread.join();
-  
-  for (size_t i = 0; i < workers.size(); i++) {
-    workers[i].join();
-  }
+  return 0;
+}
 
-  result = close(socketfd);
+QTTP::~QTTP() {
+  int result = close(socketfd);
   if (result != 0) {
     std::cout << "Close error: " << strerror(errno) << "\n";
   }
 
-  return 0;
+  std::cout << "Sending kill pill " << pipefd[1] << "\n";
+
+  char s[] = "s";
+
+  // Send enough kill pills for each thread
+  for (size_t i = 0; i < workers.size(); i++) {
+    result = write(pipefd[1], (void *)&s, 1);
+    if (result == -1) {
+      std::cout << "Pipe write error: " << strerror(errno) << "\n";
+    }
+  }
+
+  // Wait for threads to join
+  std::cout << "Waiting for workers to join\n";
+  for (size_t i = 0; i < workers.size(); i++) {
+    workers[i].join();
+  }
 }

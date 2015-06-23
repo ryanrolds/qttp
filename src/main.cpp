@@ -1,11 +1,31 @@
 #include "qttp.h"
 
 #include <cstddef>
+#include <iostream>
+
 
 int main(int argc, char *argv[]) {
-  int result = qttp();
+  QTTP *qttp = new QTTP();
+  int result = qttp->Bind();
+  if (result == -1) {
+    std::cout << "Error binding\n";
+    return -1;
+  }
 
-  // Signal handling
+  result = qttp->StartWorkers();
+  if (result == -1) {
+    std::cout << "Error starting workers\n";
+    return -1;
+  }
 
-  return result;
+  qttp->Listen();
+
+  // @TODO Signal handling
+
+  qttp->StartTTY();
+
+  // Cleanup
+  delete qttp;
+
+  return 0;
 }

@@ -16,7 +16,7 @@
 TARGET = qttp
 
 CC = g++
-CFLAGS = -g -Wall -std=c++11 -Iinclude/
+CFLAGS = -Wall -std=c++11 -Iinclude/
 
 LINKER = g++ -o
 LFLAGS = -Wall -pthread -Iinclude/ include/http_parser.o
@@ -38,6 +38,10 @@ $(BINDIR)/$(TARGET): $(OBJECTS)
 $(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.cpp
 	@$(CC) $(CFLAGS) -c $< -o $@
 	@echo "Compiled "$<" successfully!"
+
+.PHONEY: clean
+debug: CFLAGS += -g
+debug: $(BINDIR)/$(TARGET)
 
 .PHONEY: clean
 clean:
