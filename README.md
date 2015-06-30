@@ -6,12 +6,13 @@
 - Priority queue
 - Worker pool (select style)
 - Orderly shutdown
-
-### In progress
 - Worker pool (epoll style)
 
-### Backlog
+### In progress
 - Signal handling
+
+### Backlog
+
 - Access log
 - log4cplus
 - RabbitMQ thread
