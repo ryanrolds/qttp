@@ -12,6 +12,7 @@
 #include <thread>
 #include <unistd.h>
 
+http_parser *parser;
 
 void handler_accepting(handler_state *handler) {
   handler->current_state = READY;
@@ -43,6 +44,8 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   int MAXEVENTS = 10;
   struct epoll_event ev = {0};
   struct epoll_event *events;
+
+  parser = (http_parser*) malloc(sizeof(http_parser));
 
   struct handler_state handler;
   handler.current_state = START; 
@@ -99,6 +102,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   }
 
   free(events);
+  free(parser);
 
   std::cout << "Thread stopped\n";
 
@@ -176,7 +180,6 @@ int handleData(epoll_event *ev) {
   int clientfd = ev->data.fd;
       
   http_parser_settings settings = {0};
-  http_parser *parser = (http_parser*) malloc(sizeof(http_parser));
 
   char response[] = "HTTP/1.1 200\r\nContent-Length: 4\r\nContent-Type: text/html\r\n\r\nblah";
   int response_length = strlen(response);
@@ -212,8 +215,6 @@ int handleData(epoll_event *ev) {
   if (result != 0) {
     std::cout << "Close error: " << strerror(errno) << "\n";
   }
-
-  free(parser);
-  
+ 
   return 0;
 }
