@@ -15,7 +15,7 @@ class QTTP {
    QTTP();
    int Bind();
    int StartWorkers();
+   int StopWorkers();
    int Listen();
-   int StartTTY();
    ~QTTP();
 };

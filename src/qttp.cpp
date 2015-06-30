@@ -79,34 +79,17 @@ int QTTP::StartWorkers() {
   return 0;
 }
 
-int QTTP::StartTTY() {
-  std::cout << "TTY\n";
-
-  // Process commands from TTY
-  std::string word;
-  while (std::cin >> word) {
-    if (word.compare("exit") == 0) {
-      break;
-    }
-
-    std::cout << word << "\n";
-  }
-
-  return 0;
-}
-
-QTTP::~QTTP() {
+int QTTP::StopWorkers() {
   int result = close(socketfd);
   if (result != 0) {
     std::cout << "Close error: " << strerror(errno) << "\n";
   }
 
-  std::cout << "Sending kill pill " << pipefd[1] << "\n";
-
   char s[] = "s";
 
   // Send enough kill pills for each thread
   for (size_t i = 0; i < workers.size(); i++) {
+    std::cout << "Sending kill pill " << pipefd[1] << "\n";
     result = write(pipefd[1], (void *)&s, 1);
     if (result == -1) {
       std::cout << "Pipe write error: " << strerror(errno) << "\n";
@@ -118,4 +101,8 @@ QTTP::~QTTP() {
   for (size_t i = 0; i < workers.size(); i++) {
     workers[i].join();
   }
-}
+
+  return 0;
+};
+
+QTTP::~QTTP() {}
