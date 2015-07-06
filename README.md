@@ -7,12 +7,14 @@
 - Worker pool (select style)
 - Orderly shutdown
 - Worker pool (epoll style)
+- Signal handling
+- HTTP header and body handling
+- EAGAIN handling
 
 ### In progress
-- Signal handling
+
 
 ### Backlog
-
 - Access log
 - log4cplus
 - RabbitMQ thread
