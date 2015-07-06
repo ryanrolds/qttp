@@ -1,6 +1,4 @@
 #include "connection_handler_epoll.h"
-#include "connection_queue.h"
-#include "http_parser.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +10,8 @@
 #include <thread>
 #include <unistd.h>
 
-http_parser *parser;
+
+std::map<int, connection*> connections;
 
 void handler_accepting(handler_state *handler) {
   handler->current_state = READY;
@@ -44,8 +43,6 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   int MAXEVENTS = 10;
   struct epoll_event ev = {0};
   struct epoll_event *events;
-
-  parser = (http_parser*) malloc(sizeof(http_parser));
 
   struct handler_state handler;
   handler.current_state = START; 
@@ -102,7 +99,6 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   }
 
   free(events);
-  free(parser);
 
   std::cout << "Thread stopped\n";
 
@@ -169,7 +165,73 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
     std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
     return -1;
   }
+
+  connection *conn = new connection();
+  conn->parser = (http_parser*) malloc(sizeof(http_parser));
+  conn->fd = connfd;
+
+  http_parser_init(conn->parser, HTTP_REQUEST);
+  conn->parser->data = (void*) conn;
   
+  connections[connfd] = conn;
+
+  return 0;
+}
+
+int parser_on_url(http_parser *parser, const char *at, size_t length) {
+  connection *conn = (connection*) parser->data;
+  conn->url.append(at, length);
+
+  return 0;
+}
+
+int parser_on_field(http_parser *parser, const char *at, size_t length) {
+  connection *conn = (connection*) parser->data;
+
+  if (conn->value.size() > 0 && conn->field.size()) {
+    conn->headers[conn->field] = conn->value;
+
+    conn->field.clear();
+    conn->value.clear();
+  }
+
+  conn->field.append(at, length);
+
+  return 0;
+}
+
+int parser_on_value(http_parser *parser, const char *at, size_t length) {
+  connection *conn = (connection*) parser->data;
+  conn->value.append(at, length); 
+
+  return 0;
+}
+
+int headers_complete(http_parser *parser) {
+  //connection *conn = (connection*) parser->data;
+
+  //std::map<std::string, std::string>::iterator it = conn->headers.begin();
+  //for (;it != conn->headers.end(); it++) {
+  //  std::cout << it->first << ": " << it->second << "\n"; 
+  //}
+
+  return 0;
+}
+
+int parser_on_body(http_parser *parser, const char *at, size_t length) {
+  connection *conn = (connection*) parser->data;
+
+  conn->body.insert(conn->body.end(), at, at + length);
+
+  return 0;
+}
+
+int message_complete(http_parser *parser) {
+  connection *conn = (connection*) parser->data;
+  conn->complete = 1;
+
+  //std::cout << "Message complete " << conn->body.size() << "\n";
+
   return 0;
 }
 
@@ -178,33 +240,49 @@ int handleData(epoll_event *ev) {
   char buffer[bufferLen];
   ssize_t len;
   int clientfd = ev->data.fd;
-      
+  
+  connection *conn = connections[clientfd];
+
   http_parser_settings settings = {0};
+  settings.on_url = parser_on_url;
+  settings.on_header_field = parser_on_field;
+  settings.on_header_value = parser_on_value;
+  settings.on_headers_complete = headers_complete;
+  settings.on_body = parser_on_body;
+  settings.on_message_complete = message_complete;
 
   char response[] = "HTTP/1.1 200\r\nContent-Length: 4\r\nContent-Type: text/html\r\n\r\nblah";
   int response_length = strlen(response);
 
-  http_parser_init(parser, HTTP_REQUEST);
-  parser->data = (void*) &clientfd;
-
   ssize_t nparsed;
 
   while ((len = recv(clientfd, buffer, bufferLen, 0)) > 0) {
-    nparsed = http_parser_execute(parser, &settings, buffer, len);
+    nparsed = http_parser_execute(conn->parser, &settings, buffer, len);
 
-    if (parser->upgrade) {
+    if (conn->parser->upgrade) {
       // protocol renegotiation
     } else if (nparsed != len) {
-      // PROBLEM
-    }
+      std::cout << "Protocol error\n";
+
+      close_connection(conn);
+    }    
   }
 
   if (len < 0) {
-    if (errno != EAGAIN) {
-      std::cout << "Send error: " << strerror(errno) << "\n";
+    if (errno == EAGAIN) {
+      if (conn->complete != 1) {
+	// Connection not finished, wait for more data
+	return 0;
+      }
+    } else {
+      std::cout << "Recv error: " << strerror(errno) << "\n";
+
+      close_connection(conn);
       return -1;
     }
   }
+
+  //std::cout << "Sending response " << clientfd << "\n";
 
   int result = send(clientfd, response, response_length, 0);
   if (result < 0) {
@@ -215,6 +293,16 @@ int handleData(epoll_event *ev) {
   if (result != 0) {
     std::cout << "Close error: " << strerror(errno) << "\n";
   }
+
+  close_connection(conn);
  
+  return 0;
+}
+
+int close_connection(connection *conn) {
+  connections.erase(conn->fd);
+  free(conn->parser);
+  delete conn;
+
   return 0;
 }

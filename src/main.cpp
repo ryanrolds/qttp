@@ -10,6 +10,10 @@
 std::mutex running;
 QTTP *qttp;
 
+void cleanup() {
+  delete qttp;
+};
+
 void handler(int sig) {
   running.unlock();
 }
@@ -19,12 +23,14 @@ int main(int argc, char *argv[]) {
   int result = qttp->Bind();
   if (result == -1) {
     std::cout << "Error binding\n";
+    cleanup();
     return -1;
   }
 
   result = qttp->StartWorkers();
   if (result == -1) {
     std::cout << "Error starting workers\n";
+    cleanup();
     return -1;
   }
 
@@ -37,15 +43,16 @@ int main(int argc, char *argv[]) {
   result = sigaction(SIGINT, &sa, NULL); 
   if (result == -1) {
     std::cout << "sigaction error " << strerror(errno)  << "\n";
+    cleanup();
     return -1;
   } 
 
+  // Block exit, sig handler will release first lock when ready to exit
   running.lock();
   running.lock();
 
   qttp->StopWorkers();
-  delete qttp;
+  cleanup();
 
   return 0;
 }
-
