@@ -40,7 +40,7 @@ void handler_disconnection(handler_state *handler) {
 
 void *connection_handler_epoll(int noticefd, int socketfd) {
   int n;
-  int MAXEVENTS = 10;
+  int MAXEVENTS = 50;
   struct epoll_event ev = {0};
   struct epoll_event *events;
 
@@ -49,7 +49,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
 
   events = (epoll_event*) calloc(MAXEVENTS, sizeof(epoll_event));
 
-  int epfd = epoll_create(100);
+  int epfd = epoll_create1(0);
   if (epfd == -1) {
     std::cout << "epoll_create1 error: " << strerror(errno) << "\n";
   }
@@ -77,7 +77,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   handler_accepting(&handler);
 
   while (handler.current_state != SHUTDOWN) {
-    int nfds = epoll_wait(epfd, events, MAXEVENTS, 1000);
+    int nfds = epoll_wait(epfd, events, MAXEVENTS, -1);
     if (nfds == 0) {
       continue;
     }
@@ -87,13 +87,23 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
       return (void*) -1;
     }
 
+    int result = 0;
     for (n = 0; n < nfds; n++) {
       if (events[n].data.fd == socketfd) {
-	handleConnection(&handler, epfd, &events[n]);
+	result = handleConnection(&handler, epfd, &events[n]);
+	if (result != 0) {
+	  std::cout << "conn handler error" << result << "\n";
+	}
       } else if (events[n].data.fd == noticefd) {
-	handleNotice(&handler, &events[n]);
+	result = handleNotice(&handler, &events[n]);
+	if (result != 0) {
+	  std::cout << "notice handler error" << result << "\n";
+	}
       } else {
-	handleData(&events[n]);
+	result = handleData(&events[n]);
+	if (result != 0) {
+	  std::cout << "data handler error" << result << "\n";
+	}
       }
     }
   }
@@ -133,47 +143,56 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
 }
 
 int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
+  int connfd;
   struct sockaddr client = {0};
   socklen_t clientLen = sizeof(struct sockaddr);
-
-  int connfd = accept(ev->data.fd, &client, &clientLen);
-  if (connfd == -1) {
-    std::cout << "Error getting client fd\n";
-    return -1;
-  }
-
-  int flags = fcntl(connfd, F_GETFL);
-  if (flags == -1) {
-    std::cout << "client get epoll_ctl error: " << strerror(errno) << "\n";
-    return -1;
-  }
-
-  flags |= O_NONBLOCK;
-
-  int cfdctl = fcntl(connfd, F_SETFL, flags);
-  if (cfdctl == -1) {
-    std::cout << "client set epoll_ctl error: " << strerror(errno) << "\n";
-    return -1;
-  }
-
-  struct epoll_event clientev = {0};
-  clientev.events = EPOLLIN | EPOLLET;
-  clientev.data.fd = connfd;
-
-  int epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &clientev);
-  if (epctl == -1) {
-    std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
-    return -1;
-  }
-
-  connection *conn = new connection();
-  conn->parser = (http_parser*) malloc(sizeof(http_parser));
-  conn->fd = connfd;
-
-  http_parser_init(conn->parser, HTTP_REQUEST);
-  conn->parser->data = (void*) conn;
   
-  connections[connfd] = conn;
+  // Multiple connections can come in on a single EPOLLIN event
+  // accept until we get EAGAIN
+  while ((connfd = accept(ev->data.fd, &client, &clientLen)) > 0) {;
+    if (connfd == -1) {
+      std::cout << "Error getting client fd\n";
+      return -1;
+    }
+
+    int flags = fcntl(connfd, F_GETFL);
+    if (flags == -1) {
+      std::cout << "client get epoll_ctl error: " << strerror(errno) << "\n";
+      return -1;
+    }
+
+    flags |= O_NONBLOCK;
+
+    int cfdctl = fcntl(connfd, F_SETFL, flags);
+    if (cfdctl == -1) {
+      std::cout << "client set epoll_ctl error: " << strerror(errno) << "\n";
+      return -1;
+    }
+
+    struct epoll_event clientev = {0};
+    clientev.events = EPOLLIN | EPOLLET;
+    clientev.data.fd = connfd;
+
+    int epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &clientev);
+    if (epctl == -1) {
+      std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
+      return -1;
+    }
+
+    connection *conn = new connection();
+    conn->parser = (http_parser*) malloc(sizeof(http_parser));
+    conn->fd = connfd;
+
+    http_parser_init(conn->parser, HTTP_REQUEST);
+    conn->parser->data = (void*) conn;
+  
+    connections[connfd] = conn;
+  }
+
+  if (connfd < 0 && errno != EAGAIN) {
+      std::cout << "client accept error: " << strerror(errno) << "\n";
+      return -1;
+  }
 
   return 0;
 }
@@ -265,33 +284,41 @@ int handleData(epoll_event *ev) {
       std::cout << "Protocol error\n";
 
       close_connection(conn);
+      return -1;
     }    
   }
 
+  if (len == 0) {
+    if(conn->complete == 1) {
+      std::cout << "What what\n";
+    }
+    
+       //std::cout << "Size 0\n";
+    close_connection(conn);
+    return 0;
+  }
+
   if (len < 0) {
-    if (errno == EAGAIN) {
-      if (conn->complete != 1) {
-	// Connection not finished, wait for more data
-	return 0;
-      }
-    } else {
+    if (errno != EAGAIN) {
       std::cout << "Recv error: " << strerror(errno) << "\n";
 
       close_connection(conn);
       return -1;
+    } else if (conn->complete != 1) {
+      // Connection not finished, wait for more data
+      return 0;
     }
   }
 
   //std::cout << "Sending response " << clientfd << "\n";
 
-  int result = send(clientfd, response, response_length, 0);
-  if (result < 0) {
-    std::cout << "Send error: " << strerror(errno) << "\n";
+  int sent = send(clientfd, response, response_length, 0);
+  if (sent < response_length) {
+    std::cout << "Didn't send all\n";
   }
 
-  result = close(clientfd);
-  if (result != 0) {
-    std::cout << "Close error: " << strerror(errno) << "\n";
+  if (sent < 0) {
+    std::cout << "Send error: " << strerror(errno) << "\n";
   }
 
   close_connection(conn);
@@ -300,6 +327,10 @@ int handleData(epoll_event *ev) {
 }
 
 int close_connection(connection *conn) {
+  if (close(conn->fd) != 0) {
+    std::cout << "Close error: " << strerror(errno) << "\n";
+  }
+
   connections.erase(conn->fd);
   free(conn->parser);
   delete conn;

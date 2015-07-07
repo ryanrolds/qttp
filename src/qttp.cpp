@@ -37,6 +37,20 @@ int QTTP::Bind() {
   // Create socket 
   socketfd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
 
+  int flags = fcntl(socketfd, F_GETFL);
+  if (flags == -1) {
+    std::cout << "socket getfl error: " << strerror(errno) << "\n";
+    return -1;
+  }
+
+  flags |= O_NONBLOCK;
+
+  int sfdctl = fcntl(socketfd, F_SETFL, flags);
+  if (sfdctl == -1) {
+    std::cout << "socket setfl error: " << strerror(errno) << "\n";
+    return -1;
+  }
+
   // Bind socket
   result = bind(socketfd, address->ai_addr, address->ai_addrlen); 
   if (result != 0) {
@@ -52,8 +66,9 @@ int QTTP::Bind() {
 };
 
 int QTTP::Listen() {
- // Listen for connections
-  listen(socketfd, 3);
+  // Listen for connections
+  // net.core.somaxconn can limit backlog this to SOMAXCONN
+  listen(socketfd, 1024);
 
   return 0;
 }
