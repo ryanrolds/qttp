@@ -22,6 +22,6 @@
 
 ### Suggestions
 
-## Ssetup notes
+## Setup notes
 - Up nofile limits 
 - Make sure to increase net.core.somaxconn (2048?)
