@@ -10,6 +10,7 @@
 - Signal handling
 - HTTP header and body handling
 - EAGAIN handling
+- C10K+ (tested up to 20k connections)
 
 ### In progress
 
@@ -20,3 +21,7 @@
 - RabbitMQ thread
 
 ### Suggestions
+
+## Ssetup notes
+- Up nofile limits 
+- Make sure to increase net.core.somaxconn (2048?)
