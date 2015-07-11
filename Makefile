@@ -1,18 +1,3 @@
-# ------------------------------------------------
-# Generic Makefile
-#
-# Author: yanick.rochon@gmail.com
-# Date  : 2011-08-10
-#
-# Changelog :
-#   2010-11-05 - first version
-#   2011-08-10 - added structure : sources, objects, binaries
-#                thanks to http://stackoverflow.com/users/128940/beta
-#
-# Copied from Stackoverflow post: 
-# http://stackoverflow.com/questions/7004702
-# ------------------------------------------------
-
 TARGET = qttp
 
 CC = g++
@@ -25,30 +10,38 @@ SRCDIR = src
 OBJDIR = build
 BINDIR = bin
 
-SOURCES := $(wildcard $(SRCDIR)/*.cpp)
-#INCLUDES := $(wildcard $(SRCDIR)/*.h)
-OBJECTS := $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
-
 RM = rm
 
-$(BINDIR)/$(TARGET): $(OBJECTS)
-	@$(LINKER) $@ $(LFLAGS) $(OBJECTS)
-	@echo "Linked!"
+SHP2HEFILES = shp2he.o 
+SHP2HEOBJECTS = $(addprefix $(OBJDIR)/,$(SHP2HEFILES))
 
-$(OBJECTS): $(OBJDIR)/%.o : $(SRCDIR)/%.cpp
+QTTPFILES = main.o qttp.o connection_handler_epoll.o
+QTTPOBJECTS = $(addprefix $(OBJDIR)/,$(QTTPFILES))
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@$(CC) $(CFLAGS) -c $< -o $@
-	@echo "Compiled "$<" successfully!"
+	@echo "Compiled" $@ 
 
-.PHONEY: clean
+all: $(BINDIR)/qttp $(BINDIR)/shp2he
+
+$(BINDIR)/qttp: $(QTTPOBJECTS)
+	@$(LINKER) $@ $(LFLAGS) $(QTTPOBJECTS)
+	@echo "Linked" $@
+
+$(BINDIR)/shp2he: $(SHP2HEOBJECTS)
+	@$(LINKER) $@ $(LFLAGS) $(SHP2HEOBJECTS)
+	@echo "Linked" $@
+
+.PHONEY: debug
 debug: CFLAGS += -g
-debug: $(BINDIR)/$(TARGET)
+debug: all
 
 .PHONEY: clean
 clean:
-	@$(RM) $(OBJECTS)
+	@$(RM) $(OBJDIR)/*
 	@echo "Cleanup complete!"
 
 .PHONEY: remove
 remove: clean
-	@$(RM) $(BINDIR)/$(TARGET)
+	@$(RM) $(BINDIR)/*
 	@echo "Executable removed!"
