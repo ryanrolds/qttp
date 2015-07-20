@@ -1,3 +1,7 @@
+
+# QTTP
+
+
 # Roadmap
 
 ## v1.0.0 
@@ -13,7 +17,12 @@
 - C10K+ (tested up to 20k connections)
 
 ### In progress
+- connection worker
+- connection queue
+- connection object pool
 
+### To do
+- .shp to halfedge data structure
 
 ### Backlog
 - Access log

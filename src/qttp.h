@@ -8,8 +8,11 @@ class QTTP {
  private:
    struct addrinfo hints; 
    int socketfd;
+   std::thread connection_thread;
    std::array<std::thread, NUM_WORKERS> workers;
-   int pipefd[2];
+   int connection_pipefd[2];
+   int worker_pipefd[2];
+   ConnectonQueue *queue;
 
  public:
    QTTP();

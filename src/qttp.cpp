@@ -1,12 +1,12 @@
 #include "qttp.h"
 #include "connection_handler_epoll.h"
+#include "connection_worker.h"
 //#include "connection_queue.h"
 //#include "accept_handler.h"
 
 #include <array>
 #include <errno.h>
 #include <iostream>
-
 
 #include <string.h>
 #include <sys/socket.h>
@@ -22,11 +22,13 @@ int QTTP::Bind() {
   hints.ai_protocol = 0;
   hints.ai_canonname = NULL;
   hints.ai_addr = NULL;
+  hints.ai_flags = hints.ai_flags | AI_PASSIVE;
   hints.ai_next = NULL;
 
   // Address to listen for TCP conections on
   const char* port = "8080";
   struct addrinfo *address;
+  
   int result = getaddrinfo(NULL, port, &hints, &address);
   if (result != 0) {
     free(address); // Valgrind clean
@@ -73,22 +75,42 @@ int QTTP::Listen() {
   return 0;
 }
 
-int QTTP::StartWorkers() {
-  int result = pipe(pipefd);
+int QTTP::AcceptConnections() {
+  int result = pipe(connection_pipefd);
   if (result == -1) {
-    std::cout << "Pipe create error: " << strerror(errno) << "\n";
+    std::cout << "Connection pipe create error: " << strerror(errno) << "\n";
     return -1;
   }
 
-  std::cout << "Pipe read fd " << pipefd[0] << "\n";
-  std::cout << "Pipe write fd " << pipefd[1] << "\n";
+  std::cout << "Connection pipe read fd " << connection_pipefd[0] << "\n";
+  std::cout << "Connection pipe write fd " << connection_pipefd[1] << "\n";
 
+  std::cout << "Starting connection handler\n";
+  connection_thread = std::thread(connection_handler_epoll, connection_pipefd[0], queue);
+
+  return 0;
+};
+
+int QTTP::StopConnections() {
+  
+};
+
+int QTTP::StartWorkers() {
+  int result = pipe(worker_pipefd);
+  if (result == -1) {
+    std::cout << "Worker pipe create error: " << strerror(errno) << "\n";
+    return -1;
+  }
+
+  std::cout << "Worker pipe read fd " << worker_pipefd[0] << "\n";
+  std::cout << "Worker pipe write fd " << worker_pipefd[1] << "\n";
+  
   // Create Worker threads, queue from connection queue
   for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
 
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_handler_epoll, pipefd[0], socketfd);
+    workers[i] = std::thread(connection_worker, socketfd);
   }
 
   return 0;
@@ -104,8 +126,8 @@ int QTTP::StopWorkers() {
 
   // Send enough kill pills for each thread
   for (size_t i = 0; i < workers.size(); i++) {
-    std::cout << "Sending kill pill " << pipefd[1] << "\n";
-    result = write(pipefd[1], (void *)&s, 1);
+    std::cout << "Sending kill pill " << worker_pipefd[1] << "\n";
+    result = write(worker_pipefd[1], (void *)&s, 1);
     if (result == -1) {
       std::cout << "Pipe write error: " << strerror(errno) << "\n";
     }

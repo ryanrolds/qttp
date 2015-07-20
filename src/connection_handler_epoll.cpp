@@ -10,8 +10,9 @@
 #include <thread>
 #include <unistd.h>
 
-
 std::map<int, connection*> connections;
+
+ConnectionPool *pool;
 
 void handler_accepting(handler_state *handler) {
   handler->current_state = READY;
@@ -39,13 +40,16 @@ void handler_disconnection(handler_state *handler) {
 };
 
 void *connection_handler_epoll(int noticefd, int socketfd) {
-  int n;
-  int MAXEVENTS = 50;
-  struct epoll_event ev = {0};
-  struct epoll_event *events;
-
   struct handler_state handler;
   handler.current_state = START; 
+
+
+  pool = new ConnectionPool();
+
+  int MAXEVENTS = 50;
+
+  struct epoll_event ev = {0};
+  struct epoll_event *events;
 
   events = (epoll_event*) calloc(MAXEVENTS, sizeof(epoll_event));
 
@@ -56,6 +60,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
 
   std::cout << "Thread started\n";
 
+  // Added notice/pipe fd to epoll set
   ev.events = EPOLLIN;
   ev.data.fd = noticefd;
 
@@ -65,6 +70,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
     return (void*) -1;
   }
 
+  // Add socketfd to epoll set
   ev.events = EPOLLIN;
   ev.data.fd = socketfd;
 
@@ -74,32 +80,42 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
     return (void*) -1;
   }
 
+  // Update handler status
   handler_accepting(&handler);
 
+  int n;
+  int result = 0;
+
+  // Main fd event loop
   while (handler.current_state != SHUTDOWN) {
     int nfds = epoll_wait(epfd, events, MAXEVENTS, -1);
+    // Check if no events
     if (nfds == 0) {
-      continue;
+      continue; 
     }
 
+    // Handle error
     if (nfds == -1) {
       std::cout << "epoll_wait error: " << strerror(errno) << "\n";
       return (void*) -1;
     }
 
-    int result = 0;
+    // Handle events one at a time
     for (n = 0; n < nfds; n++) {
       if (events[n].data.fd == socketfd) {
+	// New connection event
 	result = handleConnection(&handler, epfd, &events[n]);
 	if (result != 0) {
 	  std::cout << "conn handler error" << result << "\n";
 	}
       } else if (events[n].data.fd == noticefd) {
+	// Notice/pipe event
 	result = handleNotice(&handler, &events[n]);
 	if (result != 0) {
 	  std::cout << "notice handler error" << result << "\n";
 	}
       } else {
+	// Connection data event
 	result = handleData(&events[n]);
 	if (result != 0) {
 	  std::cout << "data handler error" << result << "\n";
