@@ -32,5 +32,18 @@
 ### Suggestions
 
 ## Setup notes
-- Up nofile limits 
-- Make sure to increase net.core.somaxconn (2048?)
+
+### Up nofile limits
+
+Open fg limit needs to be updated. Set user's "hard" and "soft" "nofile" 
+in /etc/security/limits.conf. Restart or logout required.  
+
+### Make sure to increase net.core.somaxconn (2048?)
+
+Add entry to "/etc/sysctl.conf":
+
+    net.core.somaxconn = 1024
+
+It can also be set immediately:
+
+    # sysctl -w net.core.somaxconn=1024
