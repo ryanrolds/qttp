@@ -15,14 +15,16 @@ RM = rm
 SHP2HEFILES = shp2he.o 
 SHP2HEOBJECTS = $(addprefix $(OBJDIR)/,$(SHP2HEFILES))
 
-QTTPFILES = main.o qttp.o connection_handler_epoll.o
+QTTPFILES = main.o qttp.o connection_handler_epoll.o connection_queue.o connection_worker.o
 QTTPOBJECTS = $(addprefix $(OBJDIR)/,$(QTTPFILES))
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@$(CC) $(CFLAGS) -c $< -o $@
 	@echo "Compiled" $@ 
 
-all: $(BINDIR)/qttp $(BINDIR)/shp2he
+all: $(BINDIR)/qttp
+shp2he: $(BINDIR)/shp2he
+
 
 $(BINDIR)/qttp: $(QTTPOBJECTS)
 	@$(LINKER) $@ $(LFLAGS) $(QTTPOBJECTS)
