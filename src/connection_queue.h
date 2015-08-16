@@ -1,11 +1,13 @@
+#pragma once
+
+#include "connection.h"
 
 class ConnectionQueue {
- private:
-  
-
+  private:
+ 
  public:
   ConnectionQueue();
-  int Push(Connection);
-  connection* Pop();
   ~ConnectionQueue();
-}
+  int Push(connection*);
+  connection* Pop();
+};

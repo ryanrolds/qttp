@@ -1,3 +1,7 @@
+#include "connection_handler_epoll.h"
+#include "connection_queue.h"
+#include "connection_worker.h"
+
 #include <netdb.h>
 #include <thread>
 #include <unistd.h>
@@ -12,11 +16,13 @@ class QTTP {
    std::array<std::thread, NUM_WORKERS> workers;
    int connection_pipefd[2];
    int worker_pipefd[2];
-   ConnectonQueue *queue;
+   ConnectionQueue *queue;
 
  public:
    QTTP();
    int Bind();
+   int AcceptConnections();
+   int StopConnections();
    int StartWorkers();
    int StopWorkers();
    int Listen();

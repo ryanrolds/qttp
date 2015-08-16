@@ -12,39 +12,13 @@
 
 std::map<int, connection*> connections;
 
-ConnectionPool *pool;
+//ConnectionPool *pool;
 
-void handler_accepting(handler_state *handler) {
-  handler->current_state = READY;
-};
-
-void handler_shutdown(handler_state *handler) {
-  if (handler->connection_count == 0) {
-    handler->current_state = SHUTDOWN;
-    return;
-  }
-
-  handler->current_state = DRAIN;
-};
-
-void handler_connection(handler_state *handler) {
-  handler->connection_count++;
-};
-
-void handler_disconnection(handler_state *handler) {
-  handler->connection_count--;
-
-  if (handler->current_state == DRAIN && handler->connection_count == 0) {
-    handler->current_state = SHUTDOWN; 
-  }
-};
-
-void *connection_handler_epoll(int noticefd, int socketfd) {
+void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queue) {
   struct handler_state handler;
-  handler.current_state = START; 
+  handler.current_state = HANDLER_START; 
 
-
-  pool = new ConnectionPool();
+  //pool = new ConnectionPool();
 
   int MAXEVENTS = 50;
 
@@ -87,7 +61,7 @@ void *connection_handler_epoll(int noticefd, int socketfd) {
   int result = 0;
 
   // Main fd event loop
-  while (handler.current_state != SHUTDOWN) {
+  while (handler.current_state != HANDLER_SHUTDOWN) {
     int nfds = epoll_wait(epfd, events, MAXEVENTS, -1);
     // Check if no events
     if (nfds == 0) {
@@ -212,6 +186,31 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
 
   return 0;
 }
+
+void handler_accepting(handler_state *handler) {
+  handler->current_state = HANDLER_READY;
+};
+
+void handler_shutdown(handler_state *handler) {
+  if (handler->connection_count == 0) {
+    handler->current_state = HANDLER_SHUTDOWN;
+    return;
+  }
+
+  handler->current_state = HANDLER_DRAIN;
+};
+
+void handler_connection(handler_state *handler) {
+  handler->connection_count++;
+};
+
+void handler_disconnection(handler_state *handler) {
+  handler->connection_count--;
+
+  if (handler->current_state == HANDLER_DRAIN && handler->connection_count == 0) {
+    handler->current_state = HANDLER_SHUTDOWN; 
+  }
+};
 
 int parser_on_url(http_parser *parser, const char *at, size_t length) {
   connection *conn = (connection*) parser->data;

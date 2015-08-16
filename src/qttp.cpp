@@ -1,8 +1,4 @@
 #include "qttp.h"
-#include "connection_handler_epoll.h"
-#include "connection_worker.h"
-//#include "connection_queue.h"
-//#include "accept_handler.h"
 
 #include <array>
 #include <errno.h>
@@ -13,9 +9,12 @@
 
 #include <fcntl.h>
 
-QTTP::QTTP() {};
+QTTP::QTTP() {
+ queue = new ConnectionQueue();
+};
 
 int QTTP::Bind() {
+  // Addr hints, will look up interface
   hints = {0};
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -45,7 +44,7 @@ int QTTP::Bind() {
     return -1;
   }
 
-  flags |= O_NONBLOCK;
+  flags |= O_NONBLOCK; // Set non-blocking
 
   int sfdctl = fcntl(socketfd, F_SETFL, flags);
   if (sfdctl == -1) {
@@ -69,11 +68,11 @@ int QTTP::Bind() {
 
 int QTTP::Listen() {
   // Listen for connections
-  // net.core.somaxconn can limit backlog this to SOMAXCONN
+  // net.core.somaxconn can limit backlog, this to SOMAXCONN
   listen(socketfd, 1024);
 
   return 0;
-}
+};
 
 int QTTP::AcceptConnections() {
   int result = pipe(connection_pipefd);
@@ -86,13 +85,13 @@ int QTTP::AcceptConnections() {
   std::cout << "Connection pipe write fd " << connection_pipefd[1] << "\n";
 
   std::cout << "Starting connection handler\n";
-  connection_thread = std::thread(connection_handler_epoll, connection_pipefd[0], queue);
+  connection_thread = std::thread(connection_handler_epoll, connection_pipefd[0], socketfd, queue);
 
   return 0;
 };
 
 int QTTP::StopConnections() {
-  
+  return 0;
 };
 
 int QTTP::StartWorkers() {
@@ -110,11 +109,11 @@ int QTTP::StartWorkers() {
     std::cout << "Starting worker " << i << "\n";
 
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_worker, socketfd);
+    workers[i] = std::thread(connection_worker, worker_pipefd[0], socketfd, queue);
   }
 
   return 0;
-}
+};
 
 int QTTP::StopWorkers() {
   int result = close(socketfd);

@@ -1,8 +1,9 @@
+#include "connection_queue.h"
 
-typedef enum {START, READY, DRAIN, SHUTDOWN} worker_states;
+typedef enum {WORKER_START, WORKER_READY, WORKER_DRAIN, WORKER_SHUTDOWN} worker_states;
 
 struct worker_state {
   worker_states current_state;
 };
 
-void *connection_worker(worker_state);
+void *connection_worker(int, int, ConnectionQueue*);
