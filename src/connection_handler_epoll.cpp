@@ -90,7 +90,7 @@ void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queu
 	}
       } else {
 	// Connection data event
-	result = handleData(&events[n]);
+	result = handleData(&events[n], queue);
 	if (result != 0) {
 	  std::cout << "data handler error" << result << "\n";
 	}
@@ -168,15 +168,8 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
       std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
       return -1;
     }
-
-    connection *conn = new connection();
-    conn->parser = (http_parser*) malloc(sizeof(http_parser));
-    conn->fd = connfd;
-
-    http_parser_init(conn->parser, HTTP_REQUEST);
-    conn->parser->data = (void*) conn;
   
-    connections[connfd] = conn;
+    connections[connfd] = create_connection(connfd);;
   }
 
   if (connfd < 0 && errno != EAGAIN) {
@@ -269,7 +262,7 @@ int message_complete(http_parser *parser) {
   return 0;
 }
 
-int handleData(epoll_event *ev) {
+int handleData(epoll_event *ev, ConnectionQueue *queue) {
   size_t bufferLen = 2000;
   char buffer[bufferLen];
   ssize_t len;
@@ -285,9 +278,6 @@ int handleData(epoll_event *ev) {
   settings.on_body = parser_on_body;
   settings.on_message_complete = message_complete;
 
-  char response[] = "HTTP/1.1 200\r\nContent-Length: 4\r\nContent-Type: text/html\r\n\r\nblah";
-  int response_length = strlen(response);
-
   ssize_t nparsed;
 
   while ((len = recv(clientfd, buffer, bufferLen, 0)) > 0) {
@@ -298,7 +288,7 @@ int handleData(epoll_event *ev) {
     } else if (nparsed != len) {
       std::cout << "Protocol error\n";
 
-      close_connection(conn);
+      destroy_connection(conn);
       return -1;
     }    
   }
@@ -307,9 +297,11 @@ int handleData(epoll_event *ev) {
     if(conn->complete == 1) {
       std::cout << "What what\n";
     }
+
+    std::cout << "Zero length message received\n";
     
-       //std::cout << "Size 0\n";
-    close_connection(conn);
+    //std::cout << "Size 0\n";
+    destroy_connection(conn);
     return 0;
   }
 
@@ -317,7 +309,7 @@ int handleData(epoll_event *ev) {
     if (errno != EAGAIN) {
       std::cout << "Recv error: " << strerror(errno) << "\n";
 
-      close_connection(conn);
+      destroy_connection(conn);
       return -1;
     } else if (conn->complete != 1) {
       // Connection not finished, wait for more data
@@ -325,30 +317,11 @@ int handleData(epoll_event *ev) {
     }
   }
 
-  //std::cout << "Sending response " << clientfd << "\n";
-
-  int sent = send(clientfd, response, response_length, 0);
-  if (sent < response_length) {
-    std::cout << "Didn't send all\n";
+  if(conn->complete != 1) {
+    queue->push(conn);
+    connections.erase(conn->fd);
+    return 0;
   }
-
-  if (sent < 0) {
-    std::cout << "Send error: " << strerror(errno) << "\n";
-  }
-
-  close_connection(conn);
- 
-  return 0;
-}
-
-int close_connection(connection *conn) {
-  if (close(conn->fd) != 0) {
-    std::cout << "Close error: " << strerror(errno) << "\n";
-  }
-
-  connections.erase(conn->fd);
-  free(conn->parser);
-  delete conn;
 
   return 0;
 }

@@ -15,6 +15,4 @@ void handler_disconnection(handler_state*);
 void *connection_handler_epoll(int, int, ConnectionQueue*);
 int handleConnection(handler_state*, int, struct epoll_event*);
 int handleNotice(handler_state*, struct epoll_event*);
-int handleData(struct epoll_event*);
-
-int close_connection(connection*);
+int handleData(struct epoll_event*, ConnectionQueue*);

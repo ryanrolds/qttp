@@ -16,3 +16,6 @@ struct connection {
   std::vector<char> body;
   int complete = 0;
 };
+
+connection* create_connection(int);
+int destroy_connection(connection*);
