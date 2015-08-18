@@ -283,6 +283,8 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
   while ((len = recv(clientfd, buffer, bufferLen, 0)) > 0) {
     nparsed = http_parser_execute(conn->parser, &settings, buffer, len);
 
+    //std::cout << "recieved data " << len << "\n";
+
     if (conn->parser->upgrade) {
       // protocol renegotiation
     } else if (nparsed != len) {
@@ -317,8 +319,9 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
     }
   }
 
-  if(conn->complete != 1) {
+  if(conn->complete == 1) {
     queue->push(conn);
+
     connections.erase(conn->fd);
     return 0;
   }

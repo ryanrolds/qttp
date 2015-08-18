@@ -6,7 +6,7 @@
 #include <thread>
 #include <unistd.h>
 
-const size_t NUM_WORKERS = 1;
+const size_t NUM_WORKERS = 2;
 
 class QTTP {
  private:

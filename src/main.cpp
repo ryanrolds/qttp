@@ -27,6 +27,13 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  result = qttp->AcceptConnections();
+  if (result == -1) {
+    std::cout << "Error starting accept thread\n";
+    cleanup();
+    return -1;
+  }
+
   result = qttp->StartWorkers();
   if (result == -1) {
     std::cout << "Error starting workers\n";
@@ -51,6 +58,7 @@ int main(int argc, char *argv[]) {
   running.lock();
   running.lock();
 
+  qttp->StopConnections();
   qttp->StopWorkers();
   cleanup();
 
