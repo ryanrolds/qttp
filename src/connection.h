@@ -15,6 +15,7 @@ struct connection {
   std::map<std::string, std::string> headers;
   std::vector<char> body;
   int complete = 0;
+  bool exit = false; // Poison pill
 };
 
 connection* create_connection(int);

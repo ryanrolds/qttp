@@ -2,12 +2,11 @@
 
 #include <array>
 #include <errno.h>
+#include <fcntl.h>
 #include <iostream>
-
 #include <string.h>
 #include <sys/socket.h>
 
-#include <fcntl.h>
 
 QTTP::QTTP() {
  queue = new ConnectionQueue();
@@ -74,6 +73,22 @@ int QTTP::Listen() {
   return 0;
 };
 
+int QTTP::StopListening() {
+  int result;
+
+  result = shutdown(socketfd, SHUT_RDWR);
+  if (result != 0) {
+    std::cout << "Shutdown error: " << strerror(errno) << "\n";
+  }
+
+  result = close(socketfd);
+  if (result != 0) {
+    std::cout << "Close error: " << strerror(errno) << "\n";
+  }
+
+  return 0;
+}
+
 int QTTP::AcceptConnections() {
   int result = pipe(connection_pipefd);
   if (result == -1) {
@@ -91,46 +106,32 @@ int QTTP::AcceptConnections() {
 };
 
 int QTTP::StopConnections() {
+  char s[] = "s";
+  std::cout << "Sending kill pill " << connection_pipefd[1] << "\n";
+  int result = write(connection_pipefd[1], (void *)&s, 1);
+  if (result == -1) {
+    std::cout << "Pipe write error: " << strerror(errno) << "\n";
+  }
+
+  connection_thread.join();
+  
   return 0;
 };
 
 int QTTP::StartWorkers() {
-  int result = pipe(worker_pipefd);
-  if (result == -1) {
-    std::cout << "Worker pipe create error: " << strerror(errno) << "\n";
-    return -1;
-  }
-
-  std::cout << "Worker pipe read fd " << worker_pipefd[0] << "\n";
-  std::cout << "Worker pipe write fd " << worker_pipefd[1] << "\n";
-  
   // Create Worker threads, queue from connection queue
   for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
-
+    
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_worker, worker_pipefd[0], socketfd, queue);
+    workers[i] = std::thread(connection_worker, queue);
   }
 
   return 0;
 };
 
 int QTTP::StopWorkers() {
-  int result = close(socketfd);
-  if (result != 0) {
-    std::cout << "Close error: " << strerror(errno) << "\n";
-  }
-
-  char s[] = "s";
-
-  // Send enough kill pills for each thread
-  for (size_t i = 0; i < workers.size(); i++) {
-    std::cout << "Sending kill pill " << worker_pipefd[1] << "\n";
-    result = write(worker_pipefd[1], (void *)&s, 1);
-    if (result == -1) {
-      std::cout << "Pipe write error: " << strerror(errno) << "\n";
-    }
-  }
+  queue->shutdown();
 
   // Wait for threads to join
   std::cout << "Waiting for workers to join\n";

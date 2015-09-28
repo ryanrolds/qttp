@@ -3,11 +3,19 @@
 #include <iostream>
 
 ConnectionQueue::ConnectionQueue() {
- 
+  shutdown_queue = false;
 };
 
 ConnectionQueue::~ConnectionQueue() {
   
+};
+
+int ConnectionQueue::shutdown() {
+  std::cout << "Queue shutting down\n";
+  shutdown_queue = true;
+
+  cv.notify_all();
+  return 0;
 };
 
 int ConnectionQueue::push(connection* conn) {
@@ -26,8 +34,15 @@ int ConnectionQueue::push(connection* conn) {
 
 connection* ConnectionQueue::pop() { 
   std::unique_lock<std::mutex> lock(mtx);
-  cv.wait(lock, [this]{ return queue.empty() == false; });
+  cv.wait(lock, [this]{ return shutdown_queue == true || queue.empty() == false; });
   
+  if (queue.empty() && shutdown_queue == true) {
+    std::cout << "Sending poison pill\n";
+
+    lock.unlock();
+    return NULL;
+  }
+
   //std::cout << "Connection pop\n";
 
   connection *conn = queue.front();

@@ -1,11 +1,12 @@
 
 # QTTP
 
+## Overview
 
-# Roadmap
+## Roadmap
 
-## v1.0.0 
-### Complete
+### v1.0.0 
+#### Complete
 - Accept thread
 - Priority queue
 - Worker pool (select style)
@@ -16,20 +17,20 @@
 - EAGAIN handling
 - C10K+ (tested up to 20k connections)
 
-### In progress
+#### In progress
 - connection worker
 - connection queue
 - connection object pool
 
-### To do
+#### To do
 - .shp to halfedge data structure
 
-### Backlog
+#### Backlog
 - Access log
 - log4cplus
 - RabbitMQ thread
 
-### Suggestions
+#### Suggestions
 
 ## Setup notes
 

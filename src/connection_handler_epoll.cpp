@@ -5,12 +5,14 @@
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
+#include <stdexcept>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 
 std::map<int, connection*> connections;
+int epfd;
 
 //ConnectionPool *pool;
 
@@ -27,7 +29,7 @@ void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queu
 
   events = (epoll_event*) calloc(MAXEVENTS, sizeof(epoll_event));
 
-  int epfd = epoll_create1(0);
+  epfd = epoll_create1(0);
   if (epfd == -1) {
     std::cout << "epoll_create1 error: " << strerror(errno) << "\n";
   }
@@ -111,7 +113,7 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
   
   ssize_t len = read(ev->data.fd, buffer, bufferLen);
   if (len < 0) {
-    std::cout << "Problening getting notice\n";
+    std::cout << "Probleming getting notice\n";
     std::cout << "recv notice error: " << strerror(errno) << "\n";
     return -1;
   }
@@ -121,12 +123,14 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
     return 0;
   }
 
-  std::cout << "Got notice " << buffer << "\n";
+  std::cout << "Got notice " << buffer[0] << "\n";
   
   if (buffer[0] == 's') {
-    std::cout << "SHUTDOWN initated!\n";
+    std::cout << "Connection shutdown initated!\n";
 
     handler_shutdown(handler);
+  } else {
+    std::cout << "Unknown notice " <<  buffer[0] << "\n";
   }
  
   return 0;
@@ -165,7 +169,7 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
 
     int epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &clientev);
     if (epctl == -1) {
-      std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
+      std::cout << "epoll_ctl add error: " << strerror(errno) << "\n";
       return -1;
     }
   
@@ -267,8 +271,15 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
   char buffer[bufferLen];
   ssize_t len;
   int clientfd = ev->data.fd;
+  //int eventType = ev->events;
   
-  connection *conn = connections[clientfd];
+  connection *conn;
+  try {
+    conn = connections.at(clientfd);
+  } catch (std::out_of_range e) {
+    std::cout << "bad fd " << clientfd << "\n";
+    throw e;
+  }
 
   http_parser_settings settings = {0};
   settings.on_url = parser_on_url;
@@ -295,12 +306,23 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
     }    
   }
 
-  if (len == 0) {
+  if (len == 0) { // FD closed
     if(conn->complete == 1) {
       std::cout << "What what\n";
     }
 
+    /*
     std::cout << "Zero length message received\n";
+
+    std::cout << "EPOLLIN: " << (EPOLLIN & eventType == EPOLLIN ? 't' : 'f') << "\n";
+    std::cout << "EPOLLOUT: " << ((EPOLLOUT & eventType == EPOLLOUT) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLRDHUP: " << ((EPOLLRDHUP & eventType == EPOLLRDHUP) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLPRI: " << ((EPOLLPRI & eventType == EPOLLPRI) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLERR: " << ((EPOLLERR & eventType == EPOLLERR) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLHUP: " << ((EPOLLHUP & eventType == EPOLLHUP) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLET: " << ((EPOLLET & eventType == EPOLLET) ? 't' : 'f') << "\n";
+    std::cout << "EPOLLONESHOT: " << ((EPOLLONESHOT & eventType == EPOLLONESHOT) ? 't' : 'f') << "\n";
+    */
     
     //std::cout << "Size 0\n";
     destroy_connection(conn);
@@ -320,9 +342,15 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
   }
 
   if(conn->complete == 1) {
-    queue->push(conn);
+    int epctl = epoll_ctl(epfd, EPOLL_CTL_DEL, conn->fd, NULL);
+    if (epctl == -1) {
+      std::cout << "epoll_ctl del error: " << strerror(errno) << "\n";
+      return -1;
+    }
 
     connections.erase(conn->fd);
+
+    queue->push(conn);    
     return 0;
   }
 

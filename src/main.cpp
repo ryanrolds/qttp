@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
   running.lock();
 
   qttp->StopConnections();
+  qttp->StopListening();
   qttp->StopWorkers();
   cleanup();
 

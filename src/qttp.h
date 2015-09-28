@@ -26,5 +26,6 @@ class QTTP {
    int StartWorkers();
    int StopWorkers();
    int Listen();
+   int StopListening();
    ~QTTP();
 };
