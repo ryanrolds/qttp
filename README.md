@@ -16,10 +16,10 @@
 - HTTP header and body handling
 - EAGAIN handling
 - C10K+ (tested up to 20k connections)
-
-#### In progress
 - connection worker
 - connection queue
+
+#### In progress
 - connection object pool
 
 #### To do
