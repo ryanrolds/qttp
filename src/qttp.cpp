@@ -10,6 +10,7 @@
 
 QTTP::QTTP() {
  queue = new ConnectionQueue();
+ pool = new ConnectionPool();
 };
 
 int QTTP::Bind() {
@@ -100,7 +101,8 @@ int QTTP::AcceptConnections() {
   std::cout << "Connection pipe write fd " << connection_pipefd[1] << "\n";
 
   std::cout << "Starting connection handler\n";
-  connection_thread = std::thread(connection_handler_epoll, connection_pipefd[0], socketfd, queue);
+  connection_thread = std::thread(connection_handler_epoll, connection_pipefd[0], socketfd,
+				  pool, queue);
 
   return 0;
 };
@@ -124,7 +126,7 @@ int QTTP::StartWorkers() {
     std::cout << "Starting worker " << i << "\n";
     
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_worker, queue);
+    workers[i] = std::thread(connection_worker, pool, queue);
   }
 
   return 0;

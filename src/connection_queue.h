@@ -1,18 +1,18 @@
 #pragma once
 
-#include "connection.h"
+#include "connection_pool.h"
 
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 
 class ConnectionQueue {
-  private:
+ private:
   std::mutex mtx;
   std::condition_variable cv;
-  std::queue<connection *> queue;
+  std::queue<connection*> queue;
   bool shutdown_queue;
- 
+  
  public:
   ConnectionQueue();
   ~ConnectionQueue();

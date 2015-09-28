@@ -12,15 +12,13 @@
 #include <unistd.h>
 
 std::map<int, connection*> connections;
+
 int epfd;
 
-//ConnectionPool *pool;
-
-void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queue) {
+void *connection_handler_epoll(int noticefd, int socketfd, ConnectionPool* pool,
+			       ConnectionQueue *queue) {
   struct handler_state handler;
   handler.current_state = HANDLER_START; 
-
-  //pool = new ConnectionPool();
 
   int MAXEVENTS = 50;
 
@@ -80,7 +78,7 @@ void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queu
     for (n = 0; n < nfds; n++) {
       if (events[n].data.fd == socketfd) {
 	// New connection event
-	result = handleConnection(&handler, epfd, &events[n]);
+	result = handleConnection(&handler, epfd, &events[n], pool);
 	if (result != 0) {
 	  std::cout << "conn handler error" << result << "\n";
 	}
@@ -92,7 +90,7 @@ void *connection_handler_epoll(int noticefd, int socketfd, ConnectionQueue *queu
 	}
       } else {
 	// Connection data event
-	result = handleData(&events[n], queue);
+	result = handleData(&events[n], pool, queue);
 	if (result != 0) {
 	  std::cout << "data handler error" << result << "\n";
 	}
@@ -136,7 +134,8 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
   return 0;
 }
 
-int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
+int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev,
+		     ConnectionPool *pool) {
   int connfd;
   struct sockaddr client = {0};
   socklen_t clientLen = sizeof(struct sockaddr);
@@ -173,7 +172,7 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev) {
       return -1;
     }
   
-    connections[connfd] = create_connection(connfd);;
+    connections[connfd] = create_connection(pool, connfd);
   }
 
   if (connfd < 0 && errno != EAGAIN) {
@@ -266,7 +265,7 @@ int message_complete(http_parser *parser) {
   return 0;
 }
 
-int handleData(epoll_event *ev, ConnectionQueue *queue) {
+int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
   size_t bufferLen = 2000;
   char buffer[bufferLen];
   ssize_t len;
@@ -301,7 +300,7 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
     } else if (nparsed != len) {
       std::cout << "Protocol error\n";
 
-      destroy_connection(conn);
+      destroy_connection(pool, conn);
       return -1;
     }    
   }
@@ -325,7 +324,7 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
     */
     
     //std::cout << "Size 0\n";
-    destroy_connection(conn);
+    destroy_connection(pool, conn);
     return 0;
   }
 
@@ -333,7 +332,7 @@ int handleData(epoll_event *ev, ConnectionQueue *queue) {
     if (errno != EAGAIN) {
       std::cout << "Recv error: " << strerror(errno) << "\n";
 
-      destroy_connection(conn);
+      destroy_connection(pool, conn);
       return -1;
     } else if (conn->complete != 1) {
       // Connection not finished, wait for more data

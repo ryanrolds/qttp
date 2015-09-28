@@ -6,4 +6,4 @@ struct worker_state {
   worker_states current_state;
 };
 
-void *connection_worker(ConnectionQueue*);
+void *connection_worker(ConnectionPool*, ConnectionQueue*);

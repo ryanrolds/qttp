@@ -1,6 +1,7 @@
 #include "connection_handler_epoll.h"
 #include "connection_queue.h"
 #include "connection_worker.h"
+#include "connection_pool.h"
 
 #include <netdb.h>
 #include <thread>
@@ -17,6 +18,7 @@ class QTTP {
    int connection_pipefd[2];
    int worker_pipefd[2];
    ConnectionQueue *queue;
+   ConnectionPool *pool;
 
  public:
    QTTP();

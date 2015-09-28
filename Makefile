@@ -16,7 +16,7 @@ SHP2HEFILES = shp2he.o
 SHP2HEOBJECTS = $(addprefix $(OBJDIR)/,$(SHP2HEFILES))
 
 QTTPFILES = main.o qttp.o connection_handler_epoll.o connection_queue.o connection_worker.o \
-connection.o
+	connection_pool.o
 QTTPOBJECTS = $(addprefix $(OBJDIR)/,$(QTTPFILES))
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp

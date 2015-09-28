@@ -9,7 +9,7 @@
 char response[] = "HTTP/1.1 200\r\nContent-Length: 4\r\nContent-Type: text/html\r\n\r\nblah";
 int response_length = strlen(response);
 
-void *connection_worker(ConnectionQueue *queue) {
+void *connection_worker(ConnectionPool *pool, ConnectionQueue *queue) {
   struct worker_state status;
   status.current_state = WORKER_START;
 
@@ -29,7 +29,7 @@ void *connection_worker(ConnectionQueue *queue) {
       std::cout << "Send error: " << strerror(errno) << "\n";
     }
 
-    destroy_connection(conn);
+    destroy_connection(pool, conn);
   }
 
   std::cout << "Worker exiting\n";
