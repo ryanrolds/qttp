@@ -10,6 +10,18 @@ ConnectionPool::ConnectionPool(int max) {
 };
 ConnectionPool::~ConnectionPool() {};
 
+int ConnectionPool::getLimit() {
+  return limit;
+};
+
+int ConnectionPool::getAvailable() {
+  std::unique_lock<std::mutex> lock(mtx);
+  int available = pool.size();
+  lock.unlock();
+
+  return available;
+};
+
 connection* ConnectionPool::aquire() {
   std::unique_lock<std::mutex> lock(mtx);
  

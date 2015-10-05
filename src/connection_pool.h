@@ -33,6 +33,8 @@ class ConnectionPool {
   ~ConnectionPool();
   connection* aquire();
   int release(connection*);
+  int getLimit();
+  int getAvailable();
 };
 
 connection* create_connection(ConnectionPool*, int);

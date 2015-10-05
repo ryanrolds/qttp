@@ -18,5 +18,7 @@ class ConnectionQueue {
   ~ConnectionQueue();
   int push(connection*);
   connection* pop();
+  int size();
+  bool running();
   int shutdown();
 };

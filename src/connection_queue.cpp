@@ -7,8 +7,22 @@ ConnectionQueue::ConnectionQueue() {
 };
 
 ConnectionQueue::~ConnectionQueue() {
-  
+
 };
+
+bool ConnectionQueue::running() {
+  return shutdown_queue == false;
+}
+
+int ConnectionQueue::size() {
+  std::unique_lock<std::mutex> lock(mtx);
+
+  int size = queue.size();
+
+  lock.unlock();
+
+  return size;
+}
 
 int ConnectionQueue::shutdown() {
   std::cout << "Queue shutting down\n";
@@ -32,10 +46,10 @@ int ConnectionQueue::push(connection* conn) {
   return size;
 };
 
-connection* ConnectionQueue::pop() { 
+connection* ConnectionQueue::pop() {
   std::unique_lock<std::mutex> lock(mtx);
   cv.wait(lock, [this]{ return shutdown_queue == true || queue.empty() == false; });
-  
+
   if (queue.empty() && shutdown_queue == true) {
     std::cout << "Sending poison pill\n";
 
@@ -52,4 +66,3 @@ connection* ConnectionQueue::pop() {
 
   return conn;
 };
-

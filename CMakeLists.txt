@@ -31,8 +31,12 @@ target_link_libraries(qttp HTTPPARSER)
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
-add_executable(run_tests test/hello_test.cpp src/connection_queue.cpp)
+add_executable(run_tests test/main.cpp
+  test/connection_queue_test.cpp src/connection_queue.cpp
+  test/connection_pool_test.cpp src/connection_pool.cpp)
 target_link_libraries(run_tests ${GTEST_LIBRARIES} pthread)
+target_link_libraries(run_tests HTTPPARSER)
+
 
 enable_testing()
 add_test(NAME UnitTests COMMAND run_tests)
