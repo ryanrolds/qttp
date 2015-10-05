@@ -48,7 +48,7 @@
 
     $ cmake CMakeLists.txt
     $ make
-    $ ./run_tests    
+    $ make test
 
 ### Up nofile limits
 
