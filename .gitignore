@@ -1,4 +1,11 @@
 bin/
-build/
+lib/
+
+# cmake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
 Makefile
+
+# emacs temp files
 *~
