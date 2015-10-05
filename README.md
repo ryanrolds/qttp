@@ -18,9 +18,10 @@
 - C10K+ (tested up to 20k connections)
 - connection worker
 - connection queue
+- connection object pool
 
 #### In progress
-- connection object pool
+
 
 #### To do
 - .shp to halfedge data structure
@@ -33,6 +34,21 @@
 #### Suggestions
 
 ## Setup notes
+
+### Required packages
+
+    # apt-get install libgtest-dev cmake
+
+### Building
+
+    $ cmake CMakeLists.txt
+    $ make
+
+### Testing
+
+    $ cmake CMakeLists.txt
+    $ make
+    $ ./run_tests    
 
 ### Up nofile limits
 
