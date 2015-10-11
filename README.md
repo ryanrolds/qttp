@@ -20,11 +20,22 @@
 - connection queue
 - connection object pool
 
-#### In progress
+#### Active
 
+Introduced deadlock issue related to connection pool exhastion. Will 
+require moving data receiving from connection thread to worker threads. 
 
 #### To do
+- write unit tests for existing code, including multi-treaded tests
+- write integration tests for existing HTTP handling
 - .shp to halfedge data structure
+- create test world/plane
+- get world chunk request
+- update position
+- limit world chunk requests based on position
+- LOD
+- HTTP keepalive
+- WebSockets
 
 #### Backlog
 - Access log

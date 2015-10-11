@@ -35,8 +35,6 @@ int ConnectionQueue::shutdown() {
 int ConnectionQueue::push(connection* conn) {
   std::unique_lock<std::mutex> lock(mtx);
 
-  //std::cout << "Push connection\n";
-
   queue.push(conn);
   int size = queue.size();
 

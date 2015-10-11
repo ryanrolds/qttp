@@ -3,6 +3,7 @@
 #include "http_parser.h"
 
 #include <mutex>
+#include <condition_variable>
 #include <stack> 
 
 #include <map>
@@ -24,8 +25,10 @@ struct connection {
 class ConnectionPool {
  private:
   int limit = 100;
+  int counter = 0;
   std::stack<connection*> pool;
   std::mutex mtx;
+  std::condition_variable cv;
   
  public:
   ConnectionPool();

@@ -24,11 +24,13 @@ int ConnectionPool::getAvailable() {
 
 connection* ConnectionPool::aquire() {
   std::unique_lock<std::mutex> lock(mtx);
+  cv.wait(lock, [this]{ return pool.empty() != true || counter < limit; });
  
   connection *conn;
   if (pool.empty() == true) {
     conn = new connection();
     conn->parser = (http_parser*) malloc(sizeof(http_parser));
+    counter++;
   } else {
     conn = pool.top();
     pool.pop();
@@ -45,6 +47,8 @@ int ConnectionPool::release(connection* conn) {
   pool.push(conn);
   
   lock.unlock();
+  cv.notify_all();
+
   return 0;
 };
 
