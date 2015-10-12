@@ -1,7 +1,6 @@
 #include "connection_pool.h"
 #include "gtest/gtest.h"
 
-
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -23,14 +22,11 @@ protected:
   ConnectionPool *pool;
 
   virtual void SetUp() {
-    std::cout << "Setup\n";
     std::vector<std::thread*> threads;
       
     pool = new ConnectionPool(100);
 
     for (int i = 0; i < 200; i++) {
-      std::cout << "new thread\n";
-
       std::thread *t = new std::thread(testThread, pool);
       threads.push_back(t);
     }
@@ -46,4 +42,4 @@ protected:
 TEST_F(ConnectionPoolTestThreaded, HitLimit) {
   ASSERT_EQ(pool->getLimit(), 100);
   ASSERT_EQ(pool->getAvailable(), 100);
-}
+};

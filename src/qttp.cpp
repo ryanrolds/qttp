@@ -13,7 +13,7 @@ QTTP::QTTP() {
  pool = new ConnectionPool();
 };
 
-int QTTP::Bind() {
+int QTTP::Bind(int port) {
   // Addr hints, will look up interface
   hints = {0};
   hints.ai_family = AF_INET;
@@ -25,10 +25,13 @@ int QTTP::Bind() {
   hints.ai_next = NULL;
 
   // Address to listen for TCP conections on
-  const char* port = "8080";
   struct addrinfo *address;
   
-  int result = getaddrinfo(NULL, port, &hints, &address);
+  // Convert portfrom int to c string
+  std::string port_str = std::to_string(port);
+  const char* port_cstr = port_str.c_str();
+  
+  int result = getaddrinfo(NULL, port_cstr, &hints, &address);
   if (result != 0) {
     free(address); // Valgrind clean
     std::cout << "getaddrinfo: " << strerror(errno) << "\n"; 

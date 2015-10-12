@@ -25,7 +25,6 @@ int ConnectionQueue::size() {
 }
 
 int ConnectionQueue::shutdown() {
-  std::cout << "Queue shutting down\n";
   shutdown_queue = true;
 
   cv.notify_all();
@@ -49,13 +48,9 @@ connection* ConnectionQueue::pop() {
   cv.wait(lock, [this]{ return shutdown_queue == true || queue.empty() == false; });
 
   if (queue.empty() && shutdown_queue == true) {
-    std::cout << "Sending poison pill\n";
-
     lock.unlock();
     return NULL;
   }
-
-  //std::cout << "Connection pop\n";
 
   connection *conn = queue.front();
   queue.pop();

@@ -22,7 +22,7 @@ class QTTP {
 
  public:
    QTTP();
-   int Bind();
+   int Bind(int port);
    int AcceptConnections();
    int StopConnections();
    int StartWorkers();

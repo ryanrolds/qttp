@@ -31,10 +31,13 @@ target_link_libraries(qttp HTTPPARSER)
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
-add_executable(run_tests test/main.cpp
+add_executable(run_tests tes2t/main.cpp
   test/connection_queue_test.cpp src/connection_queue.cpp
   test/connection_pool_test.cpp src/connection_pool.cpp
-  test/connection_pool_test_threaded.cpp)
+  test/connection_pool_test_threaded.cpp
+  test/qttp_test.cpp src/qttp.cpp
+  src/connection_handler_epoll.cpp
+  src/connection_worker.cpp)
 target_link_libraries(run_tests ${GTEST_LIBRARIES} pthread)
 target_link_libraries(run_tests HTTPPARSER)
 

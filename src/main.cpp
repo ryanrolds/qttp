@@ -20,7 +20,7 @@ void handler(int sig) {
 
 int main(int argc, char *argv[]) {
   qttp = new QTTP();
-  int result = qttp->Bind();
+  int result = qttp->Bind(8080);
   if (result == -1) {
     std::cout << "Error binding\n";
     cleanup();
