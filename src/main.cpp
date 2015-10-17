@@ -1,4 +1,5 @@
 #include "qttp.h"
+#include "logging.h"
 
 #include <cstddef>
 #include <errno.h>
@@ -6,6 +7,8 @@
 #include <mutex>
 #include <signal.h>
 #include <string.h>
+
+std::string version = "0.0.1";
 
 std::mutex running;
 QTTP *qttp;
@@ -19,7 +22,14 @@ void handler(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-  qttp = new QTTP();
+  
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::DEBUG;
+  log4cpp::Category& log = logging_init(level);
+
+  // use of streams for logging messages
+  log << log4cpp::Priority::INFO << "Version: " << version;
+
+  qttp = new QTTP(&log);
   int result = qttp->Start(8080);
   if (result == -1) {
     // Error

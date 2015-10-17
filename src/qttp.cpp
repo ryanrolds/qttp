@@ -7,9 +7,10 @@
 #include <string.h>
 #include <sys/socket.h>
 
-QTTP::QTTP() {
- queue = new ConnectionQueue();
- pool = new ConnectionPool();
+QTTP::QTTP(log4cpp::Category *cat) {
+  log = cat;
+  queue = new ConnectionQueue();
+  pool = new ConnectionPool();
 };
 
 int QTTP::Start(int port) {

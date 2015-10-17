@@ -1,4 +1,5 @@
 #include "qttp.h"
+#include "logging.h"
 #include "gtest/gtest.h"
 
 #include <curlpp/cURLpp.hpp>
@@ -11,7 +12,10 @@ using namespace curlpp::options;
 
 class QTTPTest : public ::testing::Test {
 protected:
-  QTTP *qttp = new QTTP();
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::DEBUG;
+  log4cpp::Category& log = logging_init(level);
+
+  QTTP *qttp = new QTTP(&log);
 
   virtual void SetUp() {
     // Bind to ephemercal port (0)
