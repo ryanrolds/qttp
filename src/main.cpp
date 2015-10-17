@@ -20,30 +20,13 @@ void handler(int sig) {
 
 int main(int argc, char *argv[]) {
   qttp = new QTTP();
-  int result = qttp->Bind(8080);
+  int result = qttp->Start(8080);
   if (result == -1) {
-    std::cout << "Error binding\n";
-    cleanup();
-    return -1;
+    // Error
+    return result;
   }
 
-  result = qttp->AcceptConnections();
-  if (result == -1) {
-    std::cout << "Error starting accept thread\n";
-    cleanup();
-    return -1;
-  }
-
-  result = qttp->StartWorkers();
-  if (result == -1) {
-    std::cout << "Error starting workers\n";
-    cleanup();
-    return -1;
-  }
-
-  qttp->Listen();
-
-  // @TODO Signal handling
+  // Signal handling
   struct sigaction sa = {0};
   sa.sa_handler = handler;
   sa.sa_flags = SA_RESTART;
@@ -58,9 +41,12 @@ int main(int argc, char *argv[]) {
   running.lock();
   running.lock();
 
-  qttp->StopConnections();
-  qttp->StopListening();
-  qttp->StopWorkers();
+  result = qttp->Stop();
+  if (result == -1) {
+    // Error
+    return result;
+  }
+
   cleanup();
 
   return 0;

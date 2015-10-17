@@ -14,15 +14,11 @@ protected:
   QTTP *qttp = new QTTP();
 
   virtual void SetUp() {
-    qttp->Bind(0);
-    qttp->AcceptConnections();
-    qttp->StartWorkers();
-    qttp->Listen();
+    // Bind to ephemercal port (0)
+    qttp->Start(0);
   };
   virtual void TearDown() {
-    qttp->StopConnections();
-    qttp->StopListening();
-    qttp->StopWorkers();
+    qttp->Stop();
 
     delete qttp;
   };

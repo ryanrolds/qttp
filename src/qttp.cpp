@@ -12,16 +12,47 @@ QTTP::QTTP() {
  pool = new ConnectionPool();
 };
 
+int QTTP::Start(int port) {
+  int result = Bind(port);
+  if (result == -1) {
+    std::cout << "Error binding\n";
+    return -1;
+  }
+
+  result = AcceptConnections();
+  if (result == -1) {
+    std::cout << "Error starting accept thread\n";
+    return -1;
+  }
+
+  result = StartWorkers();
+  if (result == -1) {
+    std::cout << "Error starting workers\n";
+    return -1;
+  }
+
+  Listen();
+
+  return 0;
+};
+
+int QTTP::Stop() {
+  StopConnections();
+  StopListening();
+  StopWorkers();
+  return 0;
+};
+
 int QTTP::Bind(int port) {
   // Addr hints, will look up interface
   hints = {0};
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = 0;
-  hints.ai_canonname = NULL;
-  hints.ai_addr = NULL;
+  //hints.ai_canonname = NULL;
+  //hints.ai_addr = NULL;
   hints.ai_flags = hints.ai_flags | AI_PASSIVE;
-  hints.ai_next = NULL;
+  //hints.ai_next = NULL;
 
   int result;
 
@@ -83,7 +114,6 @@ int QTTP::Listen() {
   // Listen for connections
   // net.core.somaxconn can limit backlog, this to SOMAXCONN
   listen(socketfd, 1024);
-
 
   socklen_t address_len = sizeof(struct sockaddr_in);
   struct sockaddr_in address;

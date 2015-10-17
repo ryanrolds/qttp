@@ -23,6 +23,11 @@ class QTTP {
 
  public:
    QTTP();
+   // Primary functions
+   int Start(int port);
+   int Stop();
+
+   // Should only be used for testing 
    int Bind(int port);
    int AcceptConnections();
    int StopConnections();
@@ -30,6 +35,7 @@ class QTTP {
    int StopWorkers();
    int Listen();
    int StopListening();
+
    int GetPort();
    ~QTTP();
 };
