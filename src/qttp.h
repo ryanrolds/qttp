@@ -19,6 +19,7 @@ class QTTP {
    int worker_pipefd[2];
    ConnectionQueue *queue;
    ConnectionPool *pool;
+   int boundPort;
 
  public:
    QTTP();
@@ -29,5 +30,6 @@ class QTTP {
    int StopWorkers();
    int Listen();
    int StopListening();
+   int GetPort();
    ~QTTP();
 };

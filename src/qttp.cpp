@@ -7,7 +7,6 @@
 #include <string.h>
 #include <sys/socket.h>
 
-
 QTTP::QTTP() {
  queue = new ConnectionQueue();
  pool = new ConnectionPool();
@@ -24,21 +23,32 @@ int QTTP::Bind(int port) {
   hints.ai_flags = hints.ai_flags | AI_PASSIVE;
   hints.ai_next = NULL;
 
+  int result;
+
   // Address to listen for TCP conections on
   struct addrinfo *address;
-  
+
   // Convert portfrom int to c string
   std::string port_str = std::to_string(port);
   const char* port_cstr = port_str.c_str();
-  
-  int result = getaddrinfo(NULL, port_cstr, &hints, &address);
-  if (result != 0) {
-    free(address); // Valgrind clean
-    std::cout << "getaddrinfo: " << strerror(errno) << "\n"; 
-    return -1;
+
+  if (port != 0) {
+    result = getaddrinfo(NULL, port_cstr, &hints, &address);
+    if (result != 0) {
+      free(address); // Valgrind clean
+      std::cout << "getaddrinfo: " << strerror(errno) << "\n";
+      return -1;
+    }
+  } else { // Should only be used for testing
+    result = getaddrinfo("127.0.0.1", NULL, &hints, &address);
+    if (result != 0) {
+      free(address); // Valgrind clean
+      std::cout << "getaddrinfo: " << strerror(errno) << "\n";
+      return -1;
+    }
   }
 
-  // Create socket 
+  // Create socket
   socketfd = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
 
   int flags = fcntl(socketfd, F_GETFL);
@@ -56,7 +66,7 @@ int QTTP::Bind(int port) {
   }
 
   // Bind socket
-  result = bind(socketfd, address->ai_addr, address->ai_addrlen); 
+  result = bind(socketfd, address->ai_addr, address->ai_addrlen);
   if (result != 0) {
     free(address); // Valgrind clean
     std::cout << "Bind error: " << strerror(errno) << "\n";
@@ -73,6 +83,20 @@ int QTTP::Listen() {
   // Listen for connections
   // net.core.somaxconn can limit backlog, this to SOMAXCONN
   listen(socketfd, 1024);
+
+
+  socklen_t address_len = sizeof(struct sockaddr_in);
+  struct sockaddr_in address;
+
+  // Get address/name of the socket
+  int result = getsockname(socketfd, (struct sockaddr *) &address, &address_len);
+  if (result < 0) {
+    std::cout << "Sock name error: " << strerror(errno) << "\n";
+    return -1;
+  }
+
+  boundPort = ntohs(address.sin_port);
+  std::cout << "Port: " << boundPort << "\n";
 
   return 0;
 };
@@ -119,7 +143,7 @@ int QTTP::StopConnections() {
   }
 
   connection_thread.join();
-  
+
   return 0;
 };
 
@@ -127,7 +151,7 @@ int QTTP::StartWorkers() {
   // Create Worker threads, queue from connection queue
   for (size_t i = 0; i < NUM_WORKERS; i++) {
     std::cout << "Starting worker " << i << "\n";
-    
+
     // Create worker that uses epoll connection handler
     workers[i] = std::thread(connection_worker, pool, queue);
   }
@@ -145,6 +169,10 @@ int QTTP::StopWorkers() {
   }
 
   return 0;
+};
+
+int QTTP::GetPort() {
+  return boundPort;
 };
 
 QTTP::~QTTP() {}

@@ -4,6 +4,8 @@
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
 #include <curlpp/Options.hpp>
+#include <curlpp/Infos.hpp>
+
 
 using namespace curlpp::options;
 
@@ -15,6 +17,7 @@ protected:
     qttp->Bind(0);
     qttp->AcceptConnections();
     qttp->StartWorkers();
+    qttp->Listen();
   };
   virtual void TearDown() {
     qttp->StopConnections();
@@ -26,17 +29,26 @@ protected:
 };
 
 TEST_F(QTTPTest, Init) {
-  try {
+  std::string port = std::to_string(qttp->GetPort());
+
   curlpp::Cleanup myCleanup;
+  curlpp::Easy request;
 
-  curlpp::Easy myRequest;
+  // GET /ping
+  curlpp::options::Url url("http://127.0.0.1:" + port + "/ping");
+  request.setOpt(url);
 
-  myRequest.setOpt<Url>("http://google.com");
-  myRequest.perform();
-  } catch(curlpp::RuntimeError & e) {
-    std::cout << e.what() << std::endl;
-  } catch(curlpp::LogicError & e) {
-    std::cout << e.what() << std::endl;
-  }
+  // Store body in body
+  std::ostringstream body;
+  curlpp::options::WriteStream ws(&body);
+  request.setOpt(ws);
+
+  request.perform();
+
+  // Check status
+  int status = curlpp::infos::ResponseCode::get(request);
+  ASSERT_STREQ("200", std::to_string(status).c_str());
+
+  // Check body
+  ASSERT_STREQ("blah", body.str().c_str());
 };
-
