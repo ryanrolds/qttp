@@ -14,6 +14,7 @@
 struct connection {
   int fd;
   http_parser *parser;
+  log4cpp::Category *log;
   std::string url;
   std::string field;
   std::string value;

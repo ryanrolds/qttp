@@ -18,7 +18,7 @@ void handler(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::DEBUG;
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::INFO;
   log4cpp::Category* log;
   try {
     log = &logging_init(level);

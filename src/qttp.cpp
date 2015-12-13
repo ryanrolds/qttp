@@ -155,7 +155,7 @@ int QTTP::StartWorkers() {
     log->debug("Starting worker %d", i);
 
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_worker, pool, queue);
+    workers[i] = std::thread(connection_worker, log, pool, queue);
   }
 
   return 0;

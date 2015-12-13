@@ -19,6 +19,8 @@
 - connection worker
 - connection queue
 - connection object pool
+- Log4cpp
+- OOPing connection handler
 
 #### Active
 
@@ -39,7 +41,6 @@ require moving data receiving from connection thread to worker threads.
 
 #### Backlog
 - Access log
-- log4cplus
 - RabbitMQ thread
 
 #### Suggestions

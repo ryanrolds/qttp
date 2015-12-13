@@ -21,6 +21,8 @@ connection* ConnectionPool::Checkout(int connfd) {
   log->debug("Connection object aquired (%d)", connfd);
 
   conn->fd = connfd;
+  conn->log = log;
+
   http_parser_init(conn->parser, HTTP_REQUEST);
   conn->parser->data = (void*) conn;
   
@@ -103,11 +105,16 @@ int ConnectionPool::release(connection* conn) {
   log->debug("release: got lock");
   
   pool.push(conn);
+
+  log->debug("release: release lock");
   
   lock.unlock();
-  log->warn("release: release lock");
+
+  log->debug("release: notify");
+
   cv.notify_all();
-  log->warn("release: notify all");
+
+  log->debug("release: done");
 
   return 0;
 };

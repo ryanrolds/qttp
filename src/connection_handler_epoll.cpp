@@ -161,24 +161,24 @@ int ConnectionHandlerEpoll::handle_notice(struct epoll_event *ev) {
   
   ssize_t len = read(ev->data.fd, buffer, bufferLen);
   if (len < 0) {
-    std::cout << "Probleming getting notice\n";
-    std::cout << "recv notice error: " << strerror(errno) << "\n";
+    log->error("Probleming getting notice");
+    log->error("recv notice error: %s ", strerror(errno));
     return -1;
   }
 
   if (len == 0) {
-    std::cout << "Missing notice?\n";
+    log->warn("Missing notice (%d)?", ev->data.fd);
     return 0;
   }
 
-  std::cout << "Got notice " << buffer[0] << "\n";
+  log->debug("Got notice %c", buffer[0]);
   
   if (buffer[0] == 's') {
-    std::cout << "Connection shutdown initated!\n";
+    log->debug("Connection shutdown initated!");
 
     on_shutdown();
   } else {
-    std::cout << "Unknown notice " <<  buffer[0] << "\n";
+    log->warn("Unknown notice: %c", buffer[0]);
   }
  
   return 0;
@@ -195,7 +195,7 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
   // accept until we get EAGAIN
   while ((connfd = accept(ev->data.fd, &client, &clientLen)) > 0) {
     if (connfd == -1) {
-      std::cout << "Error getting client fd\n";
+      log->error("Error getting client fd (%d)", ev->data.fd);
       return -1;
     }
 
@@ -203,7 +203,7 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
 
     int flags = fcntl(connfd, F_GETFL);
     if (flags == -1) {
-      std::cout << "client get epoll_ctl error: " << strerror(errno) << "\n";
+      log->error("client get epoll_ctl error: %s", strerror(errno));
       return -1;
     }
 
@@ -211,7 +211,7 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
 
     int cfdctl = fcntl(connfd, F_SETFL, flags);
     if (cfdctl == -1) {
-      std::cout << "client set epoll_ctl error: " << strerror(errno) << "\n";
+      log->error("client set epoll_ctl error: %s", strerror(errno));
       return -1;
     }
 
@@ -221,7 +221,7 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
 
     int epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &clientev);
     if (epctl == -1) {
-      std::cout << "epoll_ctl add error: " << strerror(errno) << "\n";
+      log->error("epoll_ctl add error: %s", strerror(errno));
       return -1;
     }
 
@@ -233,8 +233,8 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
   }
 
   if (connfd < 0 && errno != EAGAIN) {
-      std::cout << "client accept error: " << strerror(errno) << "\n";
-      return -1;
+    log->error("client accept error: %s", strerror(errno));
+    return -1;
   }
 
   return 0;
@@ -295,7 +295,7 @@ int headers_complete(http_parser *parser) {
 
   //std::map<std::string, std::string>::iterator it = conn->headers.begin();
   //for (;it != conn->headers.end(); it++) {
-  //  std::cout << it->first << ": " << it->second << "\n"; 
+  //  log->debug("%s : %s", it->first, it->second); 
   //}
 
   return 0;
@@ -313,7 +313,7 @@ int message_complete(http_parser *parser) {
   connection *conn = (connection*) parser->data;
   conn->complete = 1;
 
-  //std::cout << "Message complete " << conn->body.size() << "\n";
+  conn->log->debug("Message complete %d", conn->body.size());
 
   return 0;
 }
@@ -323,13 +323,13 @@ int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
   char buffer[bufferLen];
   ssize_t len;
   int clientfd = ev->data.fd;
-  //int eventType = ev->events;
+  int eventType = ev->events;
   
   connection *conn;
   try {
     conn = connections.at(clientfd);
   } catch (std::out_of_range e) {
-    std::cout << "bad fd " << clientfd << "\n";
+    log->error( "bad fd (%d)", clientfd);
     throw e;
   }
 
@@ -346,12 +346,13 @@ int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
   while ((len = recv(clientfd, buffer, bufferLen, 0)) > 0) {
     nparsed = http_parser_execute(conn->parser, &settings, buffer, len);
 
-    //std::cout << "recieved data " << len << "\n";
+    log->debug("recieved data %d", len);
 
     if (conn->parser->upgrade) {
+      log->warn("Protocol renegotiation");
       // protocol renegotiation
     } else if (nparsed != len) {
-      std::cout << "Protocol error\n";
+      log->error("Protocol error");
 
       pool->Return(conn);
       return -1;
@@ -360,30 +361,28 @@ int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
 
   if (len == 0) { // FD closed
     if(conn->complete == 1) {
-      std::cout << "What what\n";
+      log->info("What what");
     }
 
-    /*
-    std::cout << "Zero length message received\n";
+    log->debug("Zero length message received");
 
-    std::cout << "EPOLLIN: " << (EPOLLIN & eventType == EPOLLIN ? 't' : 'f') << "\n";
-    std::cout << "EPOLLOUT: " << ((EPOLLOUT & eventType == EPOLLOUT) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLRDHUP: " << ((EPOLLRDHUP & eventType == EPOLLRDHUP) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLPRI: " << ((EPOLLPRI & eventType == EPOLLPRI) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLERR: " << ((EPOLLERR & eventType == EPOLLERR) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLHUP: " << ((EPOLLHUP & eventType == EPOLLHUP) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLET: " << ((EPOLLET & eventType == EPOLLET) ? 't' : 'f') << "\n";
-    std::cout << "EPOLLONESHOT: " << ((EPOLLONESHOT & eventType == EPOLLONESHOT) ? 't' : 'f') << "\n";
-    */
-    
-    //std::cout << "Size 0\n";
+    log->debug("EPOLLIN: %c", EPOLLIN & eventType == EPOLLIN ? 't' : 'f');
+    log->debug("EPOLLOUT: %c", EPOLLOUT & eventType == EPOLLOUT ? 't' : 'f');
+    log->debug("EPOLLRDHUP: %c", EPOLLRDHUP & eventType == EPOLLRDHUP ? 't' : 'f');
+    log->debug("EPOLLPRI: %c", EPOLLPRI & eventType == EPOLLPRI ? 't' : 'f');
+    log->debug("EPOLLERR: %c", EPOLLERR & eventType == EPOLLERR ? 't' : 'f');
+    log->debug("EPOLLHUP: %c", EPOLLHUP & eventType == EPOLLHUP ? 't' : 'f');
+    log->debug("EPOLLET: %c", EPOLLET & eventType == EPOLLET ? 't' : 'f');
+    log->debug("EPOLLONESHOT: %c", EPOLLONESHOT & eventType == EPOLLONESHOT ? 't' : 'f');    
+    log->debug("Size 0");
+
     pool->Return(conn);
     return 0;
   }
 
   if (len < 0) {
     if (errno != EAGAIN) {
-      std::cout << "Recv error: " << strerror(errno) << "\n";
+      log->error("Recv error: %s", strerror(errno));
 
       pool->Return(conn);
       return -1;
@@ -396,7 +395,7 @@ int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
   if(conn->complete == 1) {
     int epctl = epoll_ctl(epollfd, EPOLL_CTL_DEL, conn->fd, NULL);
     if (epctl == -1) {
-      std::cout << "epoll_ctl del error: " << strerror(errno) << "\n";
+      log->error("epoll_ctl del error: %s", strerror(errno));
       return -1;
     }
 

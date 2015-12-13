@@ -31,9 +31,6 @@ protected:
 };
 
 TEST_F(QTTPTest, Init) {
-  std::cout << "asdfasdfasdf\n";
-
-
   std::string port = std::to_string(qttp->GetPort());
 
   curlpp::Cleanup myCleanup;
