@@ -29,7 +29,7 @@ void *connection_worker(ConnectionPool *pool, ConnectionQueue *queue) {
       std::cout << "Send error: " << strerror(errno) << "\n";
     }
 
-    destroy_connection(pool, conn);
+    pool->Return(conn);
   }
 
   std::cout << "Worker exiting\n";

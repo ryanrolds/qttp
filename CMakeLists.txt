@@ -5,9 +5,10 @@ project(qttp)
 # C++11
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-# Create bin and lib dir
+# Create bin and lib, dir, and logs
 make_directory(lib)
 make_directory(bin)
+make_directory(logs)
 
 # Set output dirs
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

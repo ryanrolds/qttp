@@ -1,20 +1,42 @@
 #include "connection_pool.h"
 #include "connection_queue.h"
+#include "logging.h"
 
-typedef enum {HANDLER_START, HANDLER_READY, HANDLER_DRAIN, HANDLER_SHUTDOWN} handler_states;
+#include <sys/epoll.h>
+#include <thread>
 
-struct handler_state {
-  handler_states current_state;
+typedef enum {HANDLER_STOPPED, HANDLER_STARTED, HANDLER_RUNNING, HANDLER_DRAIN, HANDLER_SHUTDOWN} handler_states;
+
+const int MAXEVENTS = 50;
+
+class ConnectionHandlerEpoll {
+ private:
+  ConnectionPool* pool;
+  ConnectionQueue* queue;
+  std::thread thread;
+  int connection_pipefd[2];
+  int noticefd; // Used to talk to thread
+  int listenfd;
+  int epollfd;
   int connection_count = 0;
+  handler_states status = HANDLER_STOPPED;
+  std::map<int, connection*> connections;
+
+  int handle_connection(struct epoll_event*);
+  int handle_data(struct epoll_event*);
+  int handle_notice(struct epoll_event*);
+
+  // Events, update state machine
+  void on_shutdown();
+  void on_connection();
+  void on_disconnect();
+  
+  log4cpp::Category *log;
+
+ public:
+  ConnectionHandlerEpoll(log4cpp::Category*, ConnectionPool*, ConnectionQueue*);
+  int Start(int);
+  void* Handler();
+  int Stop();
+  ~ConnectionHandlerEpoll();
 };
-
-void handler_accepting(handler_state*);
-void handler_shutdown(handler_state*);
-void handler_connection(handler_state*);
-void handler_disconnection(handler_state*);
-
-void *connection_handler_epoll(int, int, ConnectionPool*, ConnectionQueue*);
-
-int handleConnection(handler_state*, int, struct epoll_event*, ConnectionPool*);
-int handleNotice(handler_state*, struct epoll_event*);
-int handleData(struct epoll_event*, ConnectionPool*, ConnectionQueue*);

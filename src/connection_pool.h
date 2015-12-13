@@ -1,6 +1,7 @@
 #pragma once
 
 #include "http_parser.h"
+#include "logging.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -29,16 +30,18 @@ class ConnectionPool {
   std::stack<connection*> pool;
   std::mutex mtx;
   std::condition_variable cv;
-  
- public:
-  ConnectionPool();
-  ConnectionPool(int);
-  ~ConnectionPool();
+
   connection* aquire();
   int release(connection*);
-  int getLimit();
-  int getAvailable();
-};
 
-connection* create_connection(ConnectionPool*, int);
-int destroy_connection(ConnectionPool*, connection*);
+  log4cpp::Category *log;
+  
+ public:
+  ConnectionPool(log4cpp::Category*);
+  ConnectionPool(log4cpp::Category*, int);
+  ~ConnectionPool();
+  connection* Checkout(int);
+  int Return(connection*);
+  int GetLimit();
+  int GetAvailable();
+};

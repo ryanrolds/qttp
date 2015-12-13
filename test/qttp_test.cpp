@@ -1,6 +1,10 @@
 #include "qttp.h"
-#include "logging.h"
+//#include "logging.h"
 #include "gtest/gtest.h"
+
+#include <iostream>
+#include <string.h>
+#include <stdlib.h>
 
 #include <curlpp/cURLpp.hpp>
 #include <curlpp/Easy.hpp>
@@ -8,11 +12,9 @@
 #include <curlpp/Infos.hpp>
 
 
-using namespace curlpp::options;
-
 class QTTPTest : public ::testing::Test {
 protected:
-  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::DEBUG;
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::ERROR;
   log4cpp::Category& log = logging_init(level);
 
   QTTP *qttp = new QTTP(&log);
@@ -29,6 +31,9 @@ protected:
 };
 
 TEST_F(QTTPTest, Init) {
+  std::cout << "asdfasdfasdf\n";
+
+
   std::string port = std::to_string(qttp->GetPort());
 
   curlpp::Cleanup myCleanup;

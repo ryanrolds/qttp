@@ -1,25 +1,49 @@
 #include "connection_pool.h"
 #include "gtest/gtest.h"
 
+#include <cstdio>
+
 TEST(ConnectionPoolTest, Init) {
-  ConnectionPool *pool = new ConnectionPool();
-  ASSERT_EQ(pool->getLimit(), 100);
-  ASSERT_EQ(pool->getAvailable(), 0);
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::ERROR;
+  log4cpp::Category& log = logging_init(level);
+
+  ConnectionPool *pool = new ConnectionPool(&log);
+  ASSERT_EQ(pool->GetLimit(), 100);
+  ASSERT_EQ(pool->GetAvailable(), 0);
 }
 
 TEST(ConnectionPoolTest, Limit) {
-  ConnectionPool *pool = new ConnectionPool(200);
-  ASSERT_EQ(pool->getLimit(), 200);
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::ERROR;
+  log4cpp::Category& log = logging_init(level);
+
+  ConnectionPool *pool = new ConnectionPool(&log, 200);
+  ASSERT_EQ(pool->GetLimit(), 200);
 }
 
 TEST(ConnectionPoolTest, Available) {
-  ConnectionPool *pool = new ConnectionPool();
-  ASSERT_EQ(pool->getLimit(), 100);
-  ASSERT_EQ(pool->getAvailable(), 0);
+  log4cpp::Priority::PriorityLevel level = log4cpp::Priority::ERROR;
+  log4cpp::Category& log = logging_init(level);
 
-  connection *conn = pool->aquire();
-  ASSERT_EQ(pool->getAvailable(), 0);
+  ConnectionPool *pool = new ConnectionPool(&log);
+  ASSERT_EQ(pool->GetLimit(), 100);
+  ASSERT_EQ(pool->GetAvailable(), 0);
 
-  pool->release(conn);
-  ASSERT_EQ(pool->getAvailable(), 1);
-}
+  int fd = open("/dev/null", O_APPEND);
+  if (fd == -1) {
+    log.error("Open failed: %s", strerror(errno));
+    ASSERT_NE(fd, -1);
+  }
+
+  connection *conn = pool->Checkout(fd);
+
+  ASSERT_EQ(pool->GetAvailable(), 0);
+
+  
+  int result = pool->Return(conn);
+  ASSERT_EQ(result, 0);
+
+  int available = pool->GetAvailable();
+  log.warn("asfasfdasf");
+
+  ASSERT_EQ(available, 1);
+};

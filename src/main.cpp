@@ -13,26 +13,32 @@ std::string version = "0.0.1";
 std::mutex running;
 QTTP *qttp;
 
-void cleanup() {
-  delete qttp;
-};
-
 void handler(int sig) {
   running.unlock();
 }
 
 int main(int argc, char *argv[]) {
-  
   log4cpp::Priority::PriorityLevel level = log4cpp::Priority::DEBUG;
-  log4cpp::Category& log = logging_init(level);
+  log4cpp::Category* log;
+  try {
+    log = &logging_init(level);
+  } catch(log4cpp::ConfigureFailure e) {
+    std::cout << "Fatal: " << e.what() << std::endl;
+    return -1;
+  }
+
+  log->info("### STARTING ###");
 
   // use of streams for logging messages
-  log << log4cpp::Priority::INFO << "Version: " << version;
+  log->info("Version: %s", version.c_str());
 
-  qttp = new QTTP(&log);
+  qttp = new QTTP(log);
   int result = qttp->Start(8080);
   if (result == -1) {
     // Error
+    log->fatal("Error starting qttp");
+    log->shutdown();
+
     return result;
   }
 
@@ -42,8 +48,9 @@ int main(int argc, char *argv[]) {
   sa.sa_flags = SA_RESTART;
   result = sigaction(SIGINT, &sa, NULL); 
   if (result == -1) {
-    std::cout << "sigaction error " << strerror(errno)  << "\n";
-    cleanup();
+    log->fatal("sigation erorr: ", strerror(errno));
+    log->shutdown();
+
     return -1;
   } 
 
@@ -54,10 +61,17 @@ int main(int argc, char *argv[]) {
   result = qttp->Stop();
   if (result == -1) {
     // Error
+    log->fatal("Error stopping qttp");
+    log->shutdown();
+
     return result;
   }
 
-  cleanup();
+  delete qttp;
+
+  log->info("### EXITING ###");
+
+  log->shutdown();
 
   return 0;
 }

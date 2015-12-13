@@ -12,18 +12,17 @@ const size_t NUM_WORKERS = 2;
 
 class QTTP {
  private:
-   log4cpp::Category *log;
    ConnectionQueue *queue;
    ConnectionPool *pool;
 
    struct addrinfo hints; 
    int socketfd;
-   std::thread connection_thread;
+   ConnectionHandlerEpoll *connection_handler;
    std::array<std::thread, NUM_WORKERS> workers;
-   int connection_pipefd[2];
    int worker_pipefd[2];
-
    int boundPort;
+
+   log4cpp::Category *log;
 
  public:
    QTTP(log4cpp::Category *cat);

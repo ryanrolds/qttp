@@ -6,106 +6,156 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdexcept>
-#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 
-std::map<int, connection*> connections;
+ConnectionHandlerEpoll::ConnectionHandlerEpoll(log4cpp::Category *c, 
+					       ConnectionPool *p,
+					       ConnectionQueue *q) {
+  log = c;
+  pool = p;
 
-int epfd;
+  log->debug("Pool %d", pool);
 
-void *connection_handler_epoll(int noticefd, int socketfd, ConnectionPool* pool,
-			       ConnectionQueue *queue) {
-  struct handler_state handler;
-  handler.current_state = HANDLER_START; 
+  queue = q;
+};
 
-  int MAXEVENTS = 50;
+int ConnectionHandlerEpoll::Start(int socketfd) {
+  listenfd = socketfd;
 
+  log->debug("Pool %d", pool);  
+
+  // Will use this to talk to the thread
+  int result = pipe(connection_pipefd);
+  if (result == -1) {
+    log->fatal("Connection pipe create error: %s", strerror(errno));
+    return -1;
+  }
+
+  log->debug("Connection pipe read fd %d", connection_pipefd[0]);
+  log->debug("Connection pipe write fd %d", connection_pipefd[1]);
+
+  noticefd = connection_pipefd[0];
+
+  // Start thread
+  log->debug("Starting connection handler thread");
+  thread = std::thread(&ConnectionHandlerEpoll::Handler, this);
+  log->debug("Connection handler thread started");
+};
+
+int ConnectionHandlerEpoll::Stop() {
+  char s[] = "s";
+  log->debug("Sending kill pill %d", connection_pipefd[1]);
+  int result = write(connection_pipefd[1], (void *)&s, 1);
+  if (result == -1) {
+    log->fatal("Pipe write error: %s", strerror(errno));
+  }
+
+  thread.join();
+
+  return 0;
+};
+
+ConnectionHandlerEpoll::~ConnectionHandlerEpoll() {};
+
+void* ConnectionHandlerEpoll::Handler() {
   struct epoll_event ev = {0};
   struct epoll_event *events;
 
   events = (epoll_event*) calloc(MAXEVENTS, sizeof(epoll_event));
 
-  epfd = epoll_create1(0);
-  if (epfd == -1) {
-    std::cout << "epoll_create1 error: " << strerror(errno) << "\n";
+  epollfd = epoll_create1(0);
+  if (epollfd == -1) {
+    log->error("epoll_create1 error: %s", strerror(errno));
   }
 
-  std::cout << "Thread started\n";
+  log->debug("Thread starting");
 
   // Added notice/pipe fd to epoll set
   ev.events = EPOLLIN;
   ev.data.fd = noticefd;
 
-  int epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, noticefd, &ev);
+  int epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, noticefd, &ev);
   if (epctl == -1) {
-    std::cout << "epoll_ctl noticefd error: " << strerror(errno) << "\n";
+    log->fatal("epoll_ctl noticefd error: %s", strerror(errno));
     return (void*) -1;
   }
 
   // Add socketfd to epoll set
   ev.events = EPOLLIN;
-  ev.data.fd = socketfd;
+  ev.data.fd = listenfd;
 
-  epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, socketfd, &ev);
+  epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &ev);
   if (epctl == -1) {
-    std::cout << "epoll_ctl error: " << strerror(errno) << "\n";
+    log->fatal("epoll_ctl error: %s", strerror(errno));
     return (void*) -1;
   }
 
   // Update handler status
-  handler_accepting(&handler);
+  status = HANDLER_RUNNING;
 
   int n;
   int result = 0;
 
   // Main fd event loop
-  while (handler.current_state != HANDLER_SHUTDOWN) {
-    int nfds = epoll_wait(epfd, events, MAXEVENTS, -1);
+  while (status != HANDLER_SHUTDOWN) {
+    log->debug("tick");
+
+    // Blocking epoll wait
+    int nfds = epoll_wait(epollfd, events, MAXEVENTS, -1);
     // Check if no events
     if (nfds == 0) {
+      log->debug("No events");
       continue; 
     }
 
     // Handle error
     if (nfds == -1) {
-      std::cout << "epoll_wait error: " << strerror(errno) << "\n";
+      log->fatal("epoll_wait error: %s", strerror(errno));
       return (void*) -1;
     }
 
     // Handle events one at a time
     for (n = 0; n < nfds; n++) {
-      if (events[n].data.fd == socketfd) {
+      if (events[n].data.fd == listenfd) {
+	log->debug("New connection");
+
 	// New connection event
-	result = handleConnection(&handler, epfd, &events[n], pool);
+	result = handle_connection(&events[n]);
 	if (result != 0) {
-	  std::cout << "conn handler error" << result << "\n";
+	  log->error("conn handler error: %s", result);
 	}
       } else if (events[n].data.fd == noticefd) {
+	log->debug("New notice");
+
 	// Notice/pipe event
-	result = handleNotice(&handler, &events[n]);
+	result = handle_notice(&events[n]);
 	if (result != 0) {
-	  std::cout << "notice handler error" << result << "\n";
+	  log->debug("notice handler error %s", result);
 	}
       } else {
+	log->debug("New data");
+
 	// Connection data event
-	result = handleData(&events[n], pool, queue);
+	result = handle_data(&events[n]);
 	if (result != 0) {
-	  std::cout << "data handler error" << result << "\n";
+	  log->error("data handler error: %s", result);
 	}
       }
     }
+
+    log->debug("tock");
   }
 
   free(events);
 
-  std::cout << "Thread stopped\n";
+  log->debug("Thread stopped");
 
   return 0;
 }
 
-int handleNotice(handler_state *handler, struct epoll_event *ev) {
+int ConnectionHandlerEpoll::handle_notice(struct epoll_event *ev) {
   const size_t bufferLen = 1;
   char buffer[bufferLen];
   
@@ -126,7 +176,7 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
   if (buffer[0] == 's') {
     std::cout << "Connection shutdown initated!\n";
 
-    handler_shutdown(handler);
+    on_shutdown();
   } else {
     std::cout << "Unknown notice " <<  buffer[0] << "\n";
   }
@@ -134,19 +184,22 @@ int handleNotice(handler_state *handler, struct epoll_event *ev) {
   return 0;
 }
 
-int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev,
-		     ConnectionPool *pool) {
+int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
+  log->debug("Inside handle connection");
+
   int connfd;
   struct sockaddr client = {0};
   socklen_t clientLen = sizeof(struct sockaddr);
   
   // Multiple connections can come in on a single EPOLLIN event
   // accept until we get EAGAIN
-  while ((connfd = accept(ev->data.fd, &client, &clientLen)) > 0) {;
+  while ((connfd = accept(ev->data.fd, &client, &clientLen)) > 0) {
     if (connfd == -1) {
       std::cout << "Error getting client fd\n";
       return -1;
     }
+
+    log->debug("Connection accepted (%d)", connfd);
 
     int flags = fcntl(connfd, F_GETFL);
     if (flags == -1) {
@@ -166,13 +219,17 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev,
     clientev.events = EPOLLIN | EPOLLET;
     clientev.data.fd = connfd;
 
-    int epctl = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &clientev);
+    int epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &clientev);
     if (epctl == -1) {
       std::cout << "epoll_ctl add error: " << strerror(errno) << "\n";
       return -1;
     }
+
+    log->debug("Checkout connection object (%d)", connfd);
   
-    connections[connfd] = create_connection(pool, connfd);
+    log->debug("Checkout pool %d", pool);
+
+    connections[connfd] = pool->Checkout(connfd);
   }
 
   if (connfd < 0 && errno != EAGAIN) {
@@ -183,28 +240,24 @@ int handleConnection(handler_state *handler, int epfd, struct epoll_event *ev,
   return 0;
 }
 
-void handler_accepting(handler_state *handler) {
-  handler->current_state = HANDLER_READY;
-};
-
-void handler_shutdown(handler_state *handler) {
-  if (handler->connection_count == 0) {
-    handler->current_state = HANDLER_SHUTDOWN;
+void ConnectionHandlerEpoll::on_shutdown() {
+  if (connection_count == 0) {
+    status = HANDLER_SHUTDOWN;
     return;
   }
 
-  handler->current_state = HANDLER_DRAIN;
+  status = HANDLER_DRAIN;
 };
 
-void handler_connection(handler_state *handler) {
-  handler->connection_count++;
+void ConnectionHandlerEpoll::on_connection() {
+  connection_count++;
 };
 
-void handler_disconnection(handler_state *handler) {
-  handler->connection_count--;
+void ConnectionHandlerEpoll::on_disconnect() {
+  connection_count--;
 
-  if (handler->current_state == HANDLER_DRAIN && handler->connection_count == 0) {
-    handler->current_state = HANDLER_SHUTDOWN; 
+  if (status == HANDLER_DRAIN && connection_count == 0) {
+    status= HANDLER_SHUTDOWN; 
   }
 };
 
@@ -265,7 +318,7 @@ int message_complete(http_parser *parser) {
   return 0;
 }
 
-int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
+int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
   size_t bufferLen = 2000;
   char buffer[bufferLen];
   ssize_t len;
@@ -300,7 +353,7 @@ int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
     } else if (nparsed != len) {
       std::cout << "Protocol error\n";
 
-      destroy_connection(pool, conn);
+      pool->Return(conn);
       return -1;
     }    
   }
@@ -324,7 +377,7 @@ int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
     */
     
     //std::cout << "Size 0\n";
-    destroy_connection(pool, conn);
+    pool->Return(conn);
     return 0;
   }
 
@@ -332,7 +385,7 @@ int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
     if (errno != EAGAIN) {
       std::cout << "Recv error: " << strerror(errno) << "\n";
 
-      destroy_connection(pool, conn);
+      pool->Return(conn);
       return -1;
     } else if (conn->complete != 1) {
       // Connection not finished, wait for more data
@@ -341,7 +394,7 @@ int handleData(epoll_event *ev, ConnectionPool *pool, ConnectionQueue *queue) {
   }
 
   if(conn->complete == 1) {
-    int epctl = epoll_ctl(epfd, EPOLL_CTL_DEL, conn->fd, NULL);
+    int epctl = epoll_ctl(epollfd, EPOLL_CTL_DEL, conn->fd, NULL);
     if (epctl == -1) {
       std::cout << "epoll_ctl del error: " << strerror(errno) << "\n";
       return -1;

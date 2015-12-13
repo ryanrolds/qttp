@@ -48,7 +48,8 @@ require moving data receiving from connection thread to worker threads.
 
 ### Required packages
 
-    # apt-get install cmake libgtest-dev libcurlpp-dev libcurl4-gnutls-dev
+    # apt-get install cmake libgtest-dev libcurlpp-dev libcurl4-gnutls-dev \
+        liblog4cpp5-dev
 
 ### Building
 
