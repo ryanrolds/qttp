@@ -5,20 +5,20 @@
 #include "logging.h"
 
 #include <netdb.h>
-#include <thread>
 #include <unistd.h>
 
-const size_t NUM_WORKERS = 2;
+const size_t NUM_WORKERS = 1;
 
 class QTTP {
  private:
    ConnectionQueue *queue;
+   WorkQueue* workQueue;
    ConnectionPool *pool;
 
    struct addrinfo hints; 
    int socketfd;
    ConnectionHandlerEpoll *connection_handler;
-   std::array<std::thread, NUM_WORKERS> workers;
+   std::array<ConnectionWorker*, NUM_WORKERS> workers;
    int worker_pipefd[2];
    int boundPort;
 

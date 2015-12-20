@@ -1,20 +1,20 @@
-#include "connection_queue.h"
+#include "work_queue.h"
 
 #include <iostream>
 
-ConnectionQueue::ConnectionQueue() {
+WorkQueue::WorkQueue() {
   shutdown_queue = false;
 };
 
-ConnectionQueue::~ConnectionQueue() {
+WorkQueue::~WorkQueue() {
 
 };
 
-bool ConnectionQueue::running() {
+bool WorkQueue::running() {
   return shutdown_queue == false;
 }
 
-int ConnectionQueue::size() {
+int WorkQueue::size() {
   std::unique_lock<std::mutex> lock(mtx);
 
   int size = queue.size();
@@ -24,14 +24,14 @@ int ConnectionQueue::size() {
   return size;
 }
 
-int ConnectionQueue::shutdown() {
+int WorkQueue::shutdown() {
   shutdown_queue = true;
 
   cv.notify_all();
   return 0;
 };
 
-int ConnectionQueue::push(connection* conn) {
+int WorkQueue::push(request* conn) {
   std::unique_lock<std::mutex> lock(mtx);
 
   queue.push(conn);
@@ -43,16 +43,16 @@ int ConnectionQueue::push(connection* conn) {
   return size;
 };
 
-connection* ConnectionQueue::pop() {
+request* WorkQueue::pop() {
   std::unique_lock<std::mutex> lock(mtx);
-  //cv.wait(lock, [this]{ return shutdown_queue == true || queue.empty() == false; });
+  cv.wait(lock, [this]{ return shutdown_queue == true || queue.empty() == false; });
 
-  if (queue.empty()) {
+  if (queue.empty() && shutdown_queue == true) {
     lock.unlock();
     return NULL;
   }
 
-  connection *conn = queue.front();
+  request *conn = queue.front();
   queue.pop();
 
   lock.unlock();

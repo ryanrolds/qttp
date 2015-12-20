@@ -9,6 +9,7 @@
 QTTP::QTTP(log4cpp::Category *cat) {
   log = cat;
   queue = new ConnectionQueue();
+  workQueue = new WorkQueue();
   pool = new ConnectionPool(cat);
   connection_handler = new ConnectionHandlerEpoll(log, pool, queue);
 };
@@ -19,21 +20,23 @@ int QTTP::Start(int port) {
     return -1;
   }
 
-  result = connection_handler->Start(socketfd);
-  if (result == -1) {
-    return -1;
-  }
-
+  // Listen for connections
   result = Listen();
   if (result == -1) {
     return -1;
   }
 
-  result = StartWorkers();
+  // Start connection handler
+  result = connection_handler->Start(socketfd);
   if (result == -1) {
     return -1;
   }
 
+  // Start connection workers
+  result = StartWorkers();
+  if (result == -1) {
+    return -1;
+  }
 
   return 0;
 };
@@ -155,7 +158,8 @@ int QTTP::StartWorkers() {
     log->debug("Starting worker %d", i);
 
     // Create worker that uses epoll connection handler
-    workers[i] = std::thread(connection_worker, log, pool, queue);
+    workers[i] = new ConnectionWorker(log, pool, queue, workQueue);
+    workers[i]->Start();
   }
 
   return 0;
@@ -167,7 +171,7 @@ int QTTP::StopWorkers() {
   // Wait for threads to join
   log->debug("Waiting for workers to join");
   for (size_t i = 0; i < workers.size(); i++) {
-    workers[i].join();
+    workers[i]->Stop();
   }
 
   return 0;

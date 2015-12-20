@@ -15,16 +15,13 @@ ConnectionHandlerEpoll::ConnectionHandlerEpoll(log4cpp::Category *c,
 					       ConnectionQueue *q) {
   log = c;
   pool = p;
-
-  log->debug("Pool %d", pool);
-
   queue = q;
 };
 
 int ConnectionHandlerEpoll::Start(int socketfd) {
   listenfd = socketfd;
 
-  log->debug("Pool %d", pool);  
+  log->debug("Listen for connections on fd (%d)", listenfd);
 
   // Will use this to talk to the thread
   int result = pipe(connection_pipefd);
@@ -39,9 +36,9 @@ int ConnectionHandlerEpoll::Start(int socketfd) {
   noticefd = connection_pipefd[0];
 
   // Start thread
-  log->debug("Starting connection handler thread");
+  log->info("Starting connection handler thread");
   thread = std::thread(&ConnectionHandlerEpoll::Handler, this);
-  log->debug("Connection handler thread started");
+  log->info("Connection handler thread started");
 };
 
 int ConnectionHandlerEpoll::Stop() {
@@ -60,6 +57,8 @@ int ConnectionHandlerEpoll::Stop() {
 ConnectionHandlerEpoll::~ConnectionHandlerEpoll() {};
 
 void* ConnectionHandlerEpoll::Handler() {
+  log->debug("Accept thread starting");
+
   struct epoll_event ev = {0};
   struct epoll_event *events;
 
@@ -70,11 +69,11 @@ void* ConnectionHandlerEpoll::Handler() {
     log->error("epoll_create1 error: %s", strerror(errno));
   }
 
-  log->debug("Thread starting");
-
   // Added notice/pipe fd to epoll set
   ev.events = EPOLLIN;
   ev.data.fd = noticefd;
+
+  log->debug("Accept adding notice fd (%d) to epoll", noticefd);
 
   int epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, noticefd, &ev);
   if (epctl == -1) {
@@ -86,9 +85,11 @@ void* ConnectionHandlerEpoll::Handler() {
   ev.events = EPOLLIN;
   ev.data.fd = listenfd;
 
+  log->debug("Accept adding listen fd (%d) to epoll", listenfd);
+
   epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &ev);
   if (epctl == -1) {
-    log->fatal("epoll_ctl error: %s", strerror(errno));
+    log->fatal("epoll_ctl listenfd error: %s", strerror(errno));
     return (void*) -1;
   }
 
@@ -116,15 +117,18 @@ void* ConnectionHandlerEpoll::Handler() {
       return (void*) -1;
     }
 
+    log->debug("Found %d epoll events", nfds);
+
     // Handle events one at a time
     for (n = 0; n < nfds; n++) {
+      log->debug("Event on fd (%d)", events[n].data.fd); 
       if (events[n].data.fd == listenfd) {
 	log->debug("New connection");
 
 	// New connection event
 	result = handle_connection(&events[n]);
 	if (result != 0) {
-	  log->error("conn handler error: %s", result);
+	  log->error("conn handler error: %d", result);
 	}
       } else if (events[n].data.fd == noticefd) {
 	log->debug("New notice");
@@ -135,13 +139,7 @@ void* ConnectionHandlerEpoll::Handler() {
 	  log->debug("notice handler error %s", result);
 	}
       } else {
-	log->debug("New data");
-
-	// Connection data event
-	result = handle_data(&events[n]);
-	if (result != 0) {
-	  log->error("data handler error: %s", result);
-	}
+	log->warn("Unknown event in connection handler");
       }
     }
 
@@ -201,39 +199,15 @@ int ConnectionHandlerEpoll::handle_connection(struct epoll_event *ev) {
 
     log->debug("Connection accepted (%d)", connfd);
 
-    int flags = fcntl(connfd, F_GETFL);
-    if (flags == -1) {
-      log->error("client get epoll_ctl error: %s", strerror(errno));
-      return -1;
-    }
-
-    flags |= O_NONBLOCK;
-
-    int cfdctl = fcntl(connfd, F_SETFL, flags);
-    if (cfdctl == -1) {
-      log->error("client set epoll_ctl error: %s", strerror(errno));
-      return -1;
-    }
-
-    struct epoll_event clientev = {0};
-    clientev.events = EPOLLIN | EPOLLET;
-    clientev.data.fd = connfd;
-
-    int epctl = epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &clientev);
-    if (epctl == -1) {
-      log->error("epoll_ctl add error: %s", strerror(errno));
-      return -1;
-    }
-
     log->debug("Checkout connection object (%d)", connfd);
-  
-    log->debug("Checkout pool %d", pool);
+    connection* conn = pool->Checkout(connfd);
 
-    connections[connfd] = pool->Checkout(connfd);
+    log->debug("Adding connection (%d) to queue", connfd);
+    queue->push(conn);
   }
 
   if (connfd < 0 && errno != EAGAIN) {
-    log->error("client accept error: %s", strerror(errno));
+    log->error("client accept (%d) error: %s", ev->data.fd, strerror(errno));
     return -1;
   }
 
@@ -261,149 +235,4 @@ void ConnectionHandlerEpoll::on_disconnect() {
   }
 };
 
-int parser_on_url(http_parser *parser, const char *at, size_t length) {
-  connection *conn = (connection*) parser->data;
-  conn->url.append(at, length);
 
-  return 0;
-}
-
-int parser_on_field(http_parser *parser, const char *at, size_t length) {
-  connection *conn = (connection*) parser->data;
-
-  if (conn->value.size() > 0 && conn->field.size()) {
-    conn->headers[conn->field] = conn->value;
-
-    conn->field.clear();
-    conn->value.clear();
-  }
-
-  conn->field.append(at, length);
-
-  return 0;
-}
-
-int parser_on_value(http_parser *parser, const char *at, size_t length) {
-  connection *conn = (connection*) parser->data;
-  conn->value.append(at, length); 
-
-  return 0;
-}
-
-int headers_complete(http_parser *parser) {
-  //connection *conn = (connection*) parser->data;
-
-  //std::map<std::string, std::string>::iterator it = conn->headers.begin();
-  //for (;it != conn->headers.end(); it++) {
-  //  log->debug("%s : %s", it->first, it->second); 
-  //}
-
-  return 0;
-}
-
-int parser_on_body(http_parser *parser, const char *at, size_t length) {
-  connection *conn = (connection*) parser->data;
-
-  conn->body.insert(conn->body.end(), at, at + length);
-
-  return 0;
-}
-
-int message_complete(http_parser *parser) {
-  connection *conn = (connection*) parser->data;
-  conn->complete = 1;
-
-  conn->log->debug("Message complete %d", conn->body.size());
-
-  return 0;
-}
-
-int ConnectionHandlerEpoll::handle_data(epoll_event *ev) {
-  size_t bufferLen = 2000;
-  char buffer[bufferLen];
-  ssize_t len;
-  int clientfd = ev->data.fd;
-  int eventType = ev->events;
-  
-  connection *conn;
-  try {
-    conn = connections.at(clientfd);
-  } catch (std::out_of_range e) {
-    log->error( "bad fd (%d)", clientfd);
-    throw e;
-  }
-
-  http_parser_settings settings = {0};
-  settings.on_url = parser_on_url;
-  settings.on_header_field = parser_on_field;
-  settings.on_header_value = parser_on_value;
-  settings.on_headers_complete = headers_complete;
-  settings.on_body = parser_on_body;
-  settings.on_message_complete = message_complete;
-
-  ssize_t nparsed;
-
-  while ((len = recv(clientfd, buffer, bufferLen, 0)) > 0) {
-    nparsed = http_parser_execute(conn->parser, &settings, buffer, len);
-
-    log->debug("recieved data %d", len);
-
-    if (conn->parser->upgrade) {
-      log->warn("Protocol renegotiation");
-      // protocol renegotiation
-    } else if (nparsed != len) {
-      log->error("Protocol error");
-
-      pool->Return(conn);
-      return -1;
-    }    
-  }
-
-  if (len == 0) { // FD closed
-    if(conn->complete == 1) {
-      log->info("What what");
-    }
-
-    log->debug("Zero length message received");
-
-    log->debug("EPOLLIN: %c", EPOLLIN & eventType == EPOLLIN ? 't' : 'f');
-    log->debug("EPOLLOUT: %c", EPOLLOUT & eventType == EPOLLOUT ? 't' : 'f');
-    log->debug("EPOLLRDHUP: %c", EPOLLRDHUP & eventType == EPOLLRDHUP ? 't' : 'f');
-    log->debug("EPOLLPRI: %c", EPOLLPRI & eventType == EPOLLPRI ? 't' : 'f');
-    log->debug("EPOLLERR: %c", EPOLLERR & eventType == EPOLLERR ? 't' : 'f');
-    log->debug("EPOLLHUP: %c", EPOLLHUP & eventType == EPOLLHUP ? 't' : 'f');
-    log->debug("EPOLLET: %c", EPOLLET & eventType == EPOLLET ? 't' : 'f');
-    log->debug("EPOLLONESHOT: %c", EPOLLONESHOT & eventType == EPOLLONESHOT ? 't' : 'f');    
-    log->debug("Size 0");
-
-    pool->Return(conn);
-    return 0;
-  }
-
-  if (len < 0) {
-    if (errno != EAGAIN) {
-      log->error("Recv error: %s", strerror(errno));
-
-      pool->Return(conn);
-      return -1;
-    } else if (conn->complete != 1) {
-      // Connection not finished, wait for more data
-      return 0;
-    }
-  }
-
-  if(conn->complete == 1) {
-    int epctl = epoll_ctl(epollfd, EPOLL_CTL_DEL, conn->fd, NULL);
-    if (epctl == -1) {
-      log->error("epoll_ctl del error: %s", strerror(errno));
-      return -1;
-    }
-
-    connections.erase(conn->fd);
-
-    queue->push(conn);    
-    return 0;
-  }
-
-  return 0;
-}

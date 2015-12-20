@@ -11,19 +11,21 @@ const int MAXEVENTS = 50;
 
 class ConnectionHandlerEpoll {
  private:
+  log4cpp::Category* log;
   ConnectionPool* pool;
   ConnectionQueue* queue;
+
   std::thread thread;
+
   int connection_pipefd[2];
   int noticefd; // Used to talk to thread
   int listenfd;
   int epollfd;
+
   int connection_count = 0;
   handler_states status = HANDLER_STOPPED;
-  std::map<int, connection*> connections;
 
   int handle_connection(struct epoll_event*);
-  int handle_data(struct epoll_event*);
   int handle_notice(struct epoll_event*);
 
   // Events, update state machine
@@ -31,8 +33,6 @@ class ConnectionHandlerEpoll {
   void on_connection();
   void on_disconnect();
   
-  log4cpp::Category *log;
-
  public:
   ConnectionHandlerEpoll(log4cpp::Category*, ConnectionPool*, ConnectionQueue*);
   int Start(int);

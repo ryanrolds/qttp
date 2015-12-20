@@ -21,11 +21,14 @@
 - connection object pool
 - Log4cpp
 - OOPing connection handler
+- Fixed pool deadlock
+- Created connection threads
 
 #### Active
 
-Introduced deadlock issue related to connection pool exhastion. Will 
-require moving data receiving from connection thread to worker threads. 
+Adding work queue and worker threads that will handle request procesing. This
+approach should allow keeplive to work, and lay ground work for persistent
+connections (web sockets).
 
 #### To do
 - write unit tests for existing code, including multi-treaded tests

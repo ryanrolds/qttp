@@ -24,7 +24,8 @@ include_directories(src include)
  
 add_executable(qttp src/main.cpp src/logging.cpp src/qttp.cpp
   src/connection_queue.cpp src/connection_pool.cpp
-  src/connection_handler_epoll.cpp src/connection_worker.cpp)
+  src/connection_handler_epoll.cpp src/connection_worker.cpp
+  src/work_queue.cpp)
 target_link_libraries(qttp log4cpp pthread HTTPPARSER)
 
 # Testing
@@ -37,7 +38,8 @@ add_executable(run_tests test/main.cpp src/logging.cpp
   test/connection_pool_test_threaded.cpp
   test/qttp_test.cpp src/qttp.cpp
   src/connection_handler_epoll.cpp
-  src/connection_worker.cpp)
+  src/connection_worker.cpp
+  src/work_queue.cpp)
 
 target_link_libraries(run_tests ${GTEST_LIBRARIES} pthread curlpp curl log4cpp HTTPPARSER)
 
