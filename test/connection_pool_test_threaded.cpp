@@ -8,10 +8,7 @@
 void* testThread(ConnectionPool *pool) {  
   for (int i = 0; i < 10; i++) {
     int fd = open("/dev/null", O_APPEND);
-    if (fd == -1) {
-      
-    }
-
+    
     connection *conn = pool->Checkout(fd);
       
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -43,10 +40,13 @@ TEST_F(ConnectionPoolTestThreaded, HitLimit) {
   }
  
   ASSERT_EQ(pool->GetLimit(), 100);
-  ASSERT_EQ(pool->GetAvailable(), 100);
+  ASSERT_EQ(pool->GetAvailable(), 0);
 
   while (!threads.empty()) {
     threads.back()->join();
     threads.pop_back();
   }  
+
+  ASSERT_EQ(pool->GetLimit(), 100);
+  ASSERT_EQ(pool->GetAvailable(), 100);
 };
